@@ -130,14 +130,12 @@ class ConnectWiseConfig:
             enc_private = self.security.encrypt(self.private_key)
             await self.page.client_storage.set_async("public_key", enc_public)
             await self.page.client_storage.set_async("private_key", enc_private)
-        
-        await self.page.client_storage.set_async("site_url", self.site_url)
-        await self.page.client_storage.set_async("member_id", self.member_id)
-        await self.page.client_storage.set_async("work_type", self.work_type)
-        await self.page.client_storage.set_async("billable_option", self.billable_option)
-        await self.page.client_storage.set_async("billable_option", self.billable_option)
-        await self.page.client_storage.set_async("client_id", self.client_id)
-        await self.page.client_storage.set_async("timezone_offset", self.timezone_offset)
+            await self.page.client_storage.set_async("site_url", self.site_url)
+            await self.page.client_storage.set_async("member_id", self.member_id)
+            await self.page.client_storage.set_async("work_type", self.work_type)
+            await self.page.client_storage.set_async("billable_option", self.billable_option)
+            await self.page.client_storage.set_async("client_id", self.client_id)
+            await self.page.client_storage.set_async("timezone_offset", self.timezone_offset)
 
     def is_complete(self) -> bool:
         """Verifica si la configuración crítica está completa"""
