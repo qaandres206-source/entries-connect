@@ -8,11 +8,68 @@ import asyncio
 
 # Use httpx for API calls
 import httpx
+import os
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import secrets
+
+
+class SecurityManager:
+    """Maneja la encriptación de credenciales"""
+    def __init__(self):
+        self.salt = b''
+        self.fernet: Optional[Fernet] = None
+
+    def generate_key_from_pin(self, pin: str, salt: bytes = None) -> bytes:
+        """Genera una clave de encriptación basada en el PIN"""
+        if salt is None:
+            salt = secrets.token_bytes(16)
+        self.salt = salt
+        
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(pin.encode()))
+        return key
+
+    def initialize(self, pin: str, salt_hex: str = None) -> bool:
+        """Inicializa el sistema de seguridad con un PIN"""
+        try:
+            if salt_hex:
+                salt = bytes.fromhex(salt_hex)
+            else:
+                salt = secrets.token_bytes(16)
+            
+            key = self.generate_key_from_pin(pin, salt)
+            self.fernet = Fernet(key)
+            return True
+        except Exception as e:
+            print(f"Error initializing security: {e}")
+            return False
+
+    def encrypt(self, data: str) -> str:
+        """Encripta un string"""
+        if not self.fernet or not data: return data
+        return self.fernet.encrypt(data.encode()).decode()
+
+    def decrypt(self, data: str) -> str:
+        """Desencripta un string"""
+        if not self.fernet or not data: return data
+        try:
+            return self.fernet.decrypt(data.encode()).decode()
+        except:
+            return "" # Retorna vacío si falla la desencriptación
 
 class ConnectWiseConfig:
     """Configuración de ConnectWise"""
     def __init__(self, page: ft.Page):
         self.page = page
+        self.security = SecurityManager()
+        self.is_locked = True
         # Inicializar con valores por defecto, se cargarán con load()
         self.company_id = "Intwo"
         self.public_key = ""
@@ -21,16 +78,33 @@ class ConnectWiseConfig:
         self.member_id = ""
         self.work_type = "Remote-Standard"
         self.billable_option = "DoNotBill"
-        self.work_type = "Remote-Standard"
-        self.billable_option = "DoNotBill"
         self.client_id = "4332716b-7270-470d-b7c6-9c036f760e6f"
         self.timezone_offset = -4.0 # Default to Puerto Rico (UTC-4)
+
+    async def unlock(self, pin: str) -> bool:
+        """Intenta desbloquear la configuración con el PIN"""
+        salt_hex = await self.page.client_storage.get_async("security_salt")
+        if self.security.initialize(pin, salt_hex):
+            self.is_locked = False
+            await self.load()
+            return True
+        return False
 
     async def load(self):
         """Carga la configuración del almacenamiento local de forma asíncrona"""
         self.company_id = await self.page.client_storage.get_async("company_id") or "Intwo"
-        self.public_key = await self.page.client_storage.get_async("public_key") or ""
-        self.private_key = await self.page.client_storage.get_async("private_key") or ""
+        
+        # Cargar claves encriptadas
+        enc_public = await self.page.client_storage.get_async("public_key") or ""
+        enc_private = await self.page.client_storage.get_async("private_key") or ""
+        
+        if not self.is_locked:
+            self.public_key = self.security.decrypt(enc_public)
+            self.private_key = self.security.decrypt(enc_private)
+        else:
+            # Si está bloqueado, mantenemos las versiones encriptadas o vacías
+            self.public_key = enc_public
+            self.private_key = enc_private
         self.site_url = await self.page.client_storage.get_async("site_url") or "connect.intwo.cloud"
         self.member_id = await self.page.client_storage.get_async("member_id") or ""
         self.work_type = await self.page.client_storage.get_async("work_type") or "Remote-Standard"
@@ -45,8 +119,18 @@ class ConnectWiseConfig:
     async def save(self):
         """Guarda la configuración en el almacenamiento local de forma asíncrona"""
         await self.page.client_storage.set_async("company_id", self.company_id)
-        await self.page.client_storage.set_async("public_key", self.public_key)
-        await self.page.client_storage.set_async("private_key", self.private_key)
+        
+        # Guardar Salt si es nuevo
+        if self.security.salt:
+            await self.page.client_storage.set_async("security_salt", self.security.salt.hex())
+            
+        # Encriptar antes de guardar
+        if not self.is_locked:
+            enc_public = self.security.encrypt(self.public_key)
+            enc_private = self.security.encrypt(self.private_key)
+            await self.page.client_storage.set_async("public_key", enc_public)
+            await self.page.client_storage.set_async("private_key", enc_private)
+        
         await self.page.client_storage.set_async("site_url", self.site_url)
         await self.page.client_storage.set_async("member_id", self.member_id)
         await self.page.client_storage.set_async("work_type", self.work_type)
@@ -67,11 +151,19 @@ class ConnectWiseConfig:
 
 class TimeEntry:
     """Representa una entrada de tiempo"""
-    def __init__(self, ticket_id: str, hours: float, description: str, date: datetime):
+    def __init__(self, ticket_id: str, hours: float, description: str, date: datetime, 
+                 add_to_detail: bool = False, add_to_internal: bool = True, add_to_resolution: bool = False,
+                 email_resource: bool = False, email_contact: bool = False, email_cc: bool = False):
         self.ticket_id = ticket_id
         self.hours = hours
         self.description = description
         self.date = date
+        self.add_to_detail = add_to_detail
+        self.add_to_internal = add_to_internal
+        self.add_to_resolution = add_to_resolution
+        self.email_resource = email_resource
+        self.email_contact = email_contact
+        self.email_cc = email_cc
         self.id = str(uuid.uuid4())[:8]
         self.status = "pending"  # pending, success, error
         self.error_message = ""
@@ -133,8 +225,12 @@ class ConnectWiseAPI:
                 "notes": entry.description,
                 "timeStart": time_start,
                 "timeEnd": time_end,
-                "addToDetailDescriptionFlag": False,
-                "addToInternalAnalysisFlag": True
+                "addToDetailDescriptionFlag": entry.add_to_detail,
+                "addToInternalAnalysisFlag": entry.add_to_internal,
+                "addToResolutionFlag": entry.add_to_resolution,
+                "emailResourceFlag": entry.email_resource,
+                "emailContactFlag": entry.email_contact,
+                "emailCcFlag": entry.email_cc,
             }
             
             # Use httpx for all API calls
@@ -205,6 +301,27 @@ async def main(page: ft.Page):
         max_lines=3,
         expand=True,
     )
+    
+    # Checkboxes for filters
+    cb_discussion = ft.Checkbox(label="Discussion", value=False)
+    cb_internal = ft.Checkbox(label="Internal", value=True)
+    cb_resolution = ft.Checkbox(label="Resolution", value=False)
+    
+    # Checkboxes for notifications
+    cb_resource = ft.Checkbox(label="Resource", value=False)
+    cb_contact = ft.Checkbox(label="Contact", value=False)
+    cb_cc = ft.Checkbox(label="CC", value=False)
+    
+    filters_row = ft.Row([
+        cb_discussion,
+        cb_internal,
+        cb_resolution,
+        ft.VerticalDivider(),
+        ft.Text("Notify:", size=12, weight=ft.FontWeight.BOLD),
+        cb_resource,
+        cb_contact,
+        cb_cc
+    ], spacing=10, scroll=ft.ScrollMode.AUTO)
     
     
     # Calcular rango de fechas permitido (mes actual y anterior)
@@ -324,7 +441,15 @@ async def main(page: ft.Page):
         start_time_field.update()
         
         # Crear objeto temporal para pasar a la API
-        entry = TimeEntry(ticket_id, hours, description, selected_date)
+        entry = TimeEntry(
+            ticket_id, hours, description, selected_date,
+            add_to_detail=cb_discussion.value,
+            add_to_internal=cb_internal.value,
+            add_to_resolution=cb_resolution.value,
+            email_resource=cb_resource.value,
+            email_contact=cb_contact.value,
+            email_cc=cb_cc.value
+        )
         
         # Deshabilitar botón mientras procesa
         submit_btn.disabled = True
@@ -494,6 +619,8 @@ async def main(page: ft.Page):
                             
                             ft.Row([description_field]),
                             
+                            filters_row,
+                            
                             ft.Row([
                                 date_field,
                             ], spacing=10),
@@ -530,8 +657,69 @@ async def main(page: ft.Page):
     )
     
     # Abrir configuración automáticamente si faltan datos
-    if not config.is_complete():
-        open_settings()
+    # if not config.is_complete():
+    #    open_settings()
+
+    def show_pin_dialog(is_setup=False):
+        """Muestra el diálogo de PIN"""
+        pin_field = ft.TextField(label="PIN de Seguridad", password=True, width=200, autofocus=True, on_submit=lambda e: validate_pin())
+        error_text = ft.Text("", color=ft.Colors.RED, size=12)
+        
+        async def validate_pin(e=None):
+            pin = pin_field.value
+            if not pin:
+                error_text.value = "Ingresa un PIN"
+                error_text.update()
+                return
+                
+            if is_setup:
+                # Setup mode: Initialize with this PIN
+                if config.security.initialize(pin):
+                    config.is_locked = False
+                    # Save empty config to store salt/setup
+                    await config.save()
+                    page.close(pin_dialog)
+                    open_settings() # Go to settings to fill data
+                else:
+                    error_text.value = "Error al inicializar seguridad"
+                    error_text.update()
+            else:
+                # Unlock mode
+                if await config.unlock(pin):
+                    page.close(pin_dialog)
+                    show_snackbar("Desbloqueado correctamente", ft.Colors.GREEN)
+                    if not config.is_complete():
+                        open_settings()
+                else:
+                    error_text.value = "PIN Incorrecto"
+                    error_text.update()
+        
+        title = "🛡️ Configurar Seguridad" if is_setup else "🔒 Desbloquear"
+        content_text = "Crea un PIN para proteger tus claves." if is_setup else "Ingresa tu PIN para desbloquear."
+        
+        pin_dialog = ft.AlertDialog(
+            title=ft.Text(title),
+            content=ft.Column([
+                ft.Text(content_text),
+                pin_field,
+                error_text
+            ], tight=True),
+            actions=[
+                ft.ElevatedButton("Aceptar", on_click=validate_pin)
+            ],
+            modal=True
+        )
+        page.open(pin_dialog)
+
+    # Lógica de inicio
+    # Verificar si ya existe un salt (indicador de que ya se configuró seguridad)
+    has_security = await page.client_storage.contains_key_async("security_salt")
+    
+    if has_security:
+        show_pin_dialog(is_setup=False)
+    else:
+        # Primera vez
+        show_pin_dialog(is_setup=True)
 
 
 

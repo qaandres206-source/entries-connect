@@ -1,2 +1,4 @@
-flet==0.28.3
+flet
+httpx
+cryptography==0.28.3
 httpx
