@@ -1,4 +1,3 @@
 flet
 httpx
-cryptography==0.28.3
-httpx
+cryptography
