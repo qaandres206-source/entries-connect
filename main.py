@@ -152,12 +152,14 @@ class ConnectWiseConfig:
 class TimeEntry:
     """Representa una entrada de tiempo"""
     def __init__(self, ticket_id: str, hours: float, description: str, date: datetime, 
+                 billable_option: str,
                  add_to_detail: bool = False, add_to_internal: bool = True, add_to_resolution: bool = False,
                  email_resource: bool = False, email_contact: bool = False, email_cc: bool = False):
         self.ticket_id = ticket_id
         self.hours = hours
         self.description = description
         self.date = date
+        self.billable_option = billable_option
         self.add_to_detail = add_to_detail
         self.add_to_internal = add_to_internal
         self.add_to_resolution = add_to_resolution
@@ -220,7 +222,7 @@ class ConnectWiseAPI:
                 "chargeToType": "ServiceTicket",
                 "member": {"identifier": self.config.member_id},
                 "actualHours": entry.hours,
-                "billableOption": self.config.billable_option,
+                "billableOption": entry.billable_option,
                 "workType": {"name": self.config.work_type},
                 "notes": entry.description,
                 "timeStart": time_start,
@@ -292,6 +294,17 @@ async def main(page: ft.Page):
         width=100,
         value="08:00",
         keyboard_type=ft.KeyboardType.DATETIME
+    )
+
+    billable_dropdown = ft.Dropdown(
+        label="Billable",
+        width=150,
+        options=[
+            ft.dropdown.Option("Billable"),
+            ft.dropdown.Option("DoNotBill", "Do Not Bill"),
+            ft.dropdown.Option("NoCharge", "No Charge"),
+        ],
+        value="DoNotBill"
     )
     
     description_field = ft.TextField(
@@ -443,6 +456,7 @@ async def main(page: ft.Page):
         # Crear objeto temporal para pasar a la API
         entry = TimeEntry(
             ticket_id, hours, description, selected_date,
+            billable_option=billable_dropdown.value,
             add_to_detail=cb_discussion.value,
             add_to_internal=cb_internal.value,
             add_to_resolution=cb_resolution.value,
@@ -615,6 +629,7 @@ async def main(page: ft.Page):
                                 ticket_field,
                                 start_time_field,
                                 hours_field,
+                                billable_dropdown,
                             ], spacing=10, wrap=True),
                             
                             ft.Row([description_field]),
