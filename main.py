@@ -278,21 +278,8 @@ async def main(page: ft.Page):
         autofocus=True
     )
     
-    hours_field = ft.TextField(
-        label="Horas",
-        hint_text="1.0 - 8.0",
-        width=100,
-        keyboard_type=ft.KeyboardType.NUMBER,
-        value="1.0"
-    )
     
-    start_time_field = ft.TextField(
-        label="Hora Inicio",
-        hint_text="HH:MM (24h)",
-        width=100,
-        value="08:00",
-        keyboard_type=ft.KeyboardType.DATETIME
-    )
+
 
     billable_dropdown = ft.Dropdown(
         label="Billable",
@@ -347,27 +334,107 @@ async def main(page: ft.Page):
     min_date_str = first_day_prev_month.strftime("%Y-%m-%d")
     max_date_str = today.strftime("%Y-%m-%d")
     
-    selected_date = datetime.now()
+    # Lista de fechas y horas de inicio para múltiples entradas
+    date_entries = []
     
-    # Campo de fecha editable
-    date_field = ft.TextField(
-        label="Fecha",
-        value=selected_date.strftime("%Y-%m-%d"),
-        width=200,
-        hint_text="YYYY-MM-DD",
-        prefix_icon=ft.Icons.CALENDAR_TODAY,
-        helper_text=f"Rango: {min_date_str} a {max_date_str}",
+    def create_date_entry_row(index: int):
+        """Crea una fila de fecha con hora de inicio y botón de eliminar"""
+        date_field = ft.TextField(
+            label="Fecha",
+            value=datetime.now().strftime("%Y-%m-%d"),
+            width=150,
+            hint_text="YYYY-MM-DD",
+            prefix_icon=ft.Icons.CALENDAR_TODAY,
+            data=index,
+        )
+        
+        time_field = ft.TextField(
+            label="Hora Inicio",
+            hint_text="HH:MM",
+            width=100,
+            value="08:00",
+            keyboard_type=ft.KeyboardType.DATETIME,
+            data=index,
+        )
+        
+        hours_display = ft.TextField(
+            label="Horas",
+            width=80,
+            value="1.0",
+            keyboard_type=ft.KeyboardType.NUMBER,
+            data=index,
+        )
+        
+        def remove_date_entry(e):
+            """Elimina esta fila de fecha"""
+            # Encontrar y eliminar de la lista
+            for i, entry in enumerate(date_entries):
+                if entry['index'] == index:
+                    date_entries.pop(i)
+                    break
+            update_date_entries_ui()
+        
+        remove_btn = ft.IconButton(
+            icon=ft.Icons.REMOVE_CIRCLE,
+            icon_color=ft.Colors.RED_400,
+            tooltip="Eliminar fecha",
+            on_click=remove_date_entry,
+            visible=len(date_entries) > 0,  # Solo visible si hay más de una fecha
+        )
+        
+        row = ft.Row([
+            date_field,
+            time_field,
+            hours_display,
+            remove_btn,
+        ], spacing=10)
+        
+        return {
+            'index': index,
+            'row': row,
+            'date_field': date_field,
+            'time_field': time_field,
+            'hours_field': hours_display,
+            'remove_btn': remove_btn,
+        }
+    
+    # Contenedor para las filas de fechas
+    date_entries_column = ft.Column(spacing=10)
+    
+    def update_date_entries_ui():
+        """Actualiza la UI de las entradas de fecha"""
+        date_entries_column.controls.clear()
+        
+        for entry in date_entries:
+            # Actualizar visibilidad del botón de eliminar
+            entry['remove_btn'].visible = len(date_entries) > 1
+            date_entries_column.controls.append(entry['row'])
+        
+        # Solo actualizar si ya está en la página
+        if date_entries_column.page:
+            date_entries_column.update()
+    
+    def add_date_entry(e=None):
+        """Agrega una nueva fila de fecha"""
+        index = len(date_entries)
+        new_entry = create_date_entry_row(index)
+        date_entries.append(new_entry)
+        update_date_entries_ui()
+    
+    # Agregar la primera fecha por defecto
+    add_date_entry()
+    
+    # Botón para agregar más fechas
+    add_date_btn = ft.Container(
+        content=ft.IconButton(
+            icon=ft.Icons.ADD_CIRCLE,
+            icon_color=ft.Colors.WHITE,
+            bgcolor=ft.Colors.BLUE_500,
+            tooltip="Agregar otra fecha",
+            on_click=add_date_entry,
+        ),
+        alignment=ft.alignment.center,
     )
-    
-    def parse_date_from_field():
-        """Parsea la fecha del campo de texto"""
-        nonlocal selected_date
-        try:
-            date_str = date_field.value
-            selected_date = datetime.strptime(date_str, "%Y-%m-%d")
-            return True
-        except:
-            return False
     
     log_list = ft.Column(
         spacing=5,
@@ -398,96 +465,106 @@ async def main(page: ft.Page):
         log_list.update()
 
     async def submit_entry(e):
-        """Envía la entrada directamente"""
+        """Envía la entrada directamente para todas las fechas configuradas"""
         ticket_id = ticket_field.value.strip()
         
         if not ticket_id:
             show_snackbar("Por favor ingresa un Ticket ID", ft.Colors.RED)
             return
         
-        # Parsear fecha del campo
-        if not parse_date_from_field():
-            show_snackbar("Por favor ingresa una fecha válida (YYYY-MM-DD)", ft.Colors.RED)
-            return
-        
-        try:
-            hours = float(hours_field.value)
-            if hours <= 0 or hours > 8:
-                show_snackbar("Las horas deben estar entre 0 y 8", ft.Colors.RED)
-                return
-        except ValueError:
-            show_snackbar("Por favor ingresa un valor numérico válido", ft.Colors.RED)
+        # Validar que haya al menos una fecha
+        if not date_entries:
+            show_snackbar("Debe haber al menos una fecha", ft.Colors.RED)
             return
         
         description = description_field.value.strip()
         if not description:
             show_snackbar("Por favor ingresa una descripción", ft.Colors.RED)
             return
-            
-        # Determinar hora de inicio
-        date_key = selected_date.strftime("%Y-%m-%d")
-        if date_key not in day_tracker:
-            day_tracker[date_key] = 8.0 # Empezar a las 8:00 AM
-            
-        start_hour = day_tracker[date_key]
-        
-        # Sobrescribir con el campo manual si es válido
-        try:
-            st_val = start_time_field.value.strip()
-            if ":" in st_val:
-                parts = st_val.split(":")
-                h = int(parts[0])
-                m = int(parts[1])
-                start_hour = h + (m / 60.0)
-        except:
-            pass # Mantener automático si falla
-            
-        # Actualizar tracker para la SIGUIENTE entrada
-        day_tracker[date_key] = start_hour + hours
-        
-        # Actualizar visualmente el campo de hora para la siguiente
-        next_h = int(day_tracker[date_key])
-        next_m = int((day_tracker[date_key] % 1) * 60)
-        start_time_field.value = f"{next_h:02d}:{next_m:02d}"
-        start_time_field.update()
-        
-        # Crear objeto temporal para pasar a la API
-        entry = TimeEntry(
-            ticket_id, hours, description, selected_date,
-            billable_option=billable_dropdown.value,
-            add_to_detail=cb_discussion.value,
-            add_to_internal=cb_internal.value,
-            add_to_resolution=cb_resolution.value,
-            email_resource=cb_resource.value,
-            email_contact=cb_contact.value,
-            email_cc=cb_cc.value
-        )
         
         # Deshabilitar botón mientras procesa
         submit_btn.disabled = True
         submit_btn.text = "Enviando..."
         submit_btn.update()
         
+        success_count = 0
+        error_count = 0
+        
         try:
-            is_success, message = await api.post_time_entry(entry, start_hour)
+            # Procesar cada fecha
+            for date_entry in date_entries:
+                try:
+                    # Parsear fecha
+                    date_str = date_entry['date_field'].value.strip()
+                    selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+                except ValueError:
+                    add_log(f"Fecha inválida: {date_str}", is_error=True)
+                    error_count += 1
+                    continue
+                
+                try:
+                    # Obtener horas desde el campo específico de esta fecha
+                    hours = float(date_entry['hours_field'].value)
+                    if hours <= 0 or hours > 8:
+                        add_log(f"Horas inválidas para {date_str}: {hours}", is_error=True)
+                        error_count += 1
+                        continue
+                except ValueError:
+                    add_log(f"Horas inválidas para {date_str}", is_error=True)
+                    error_count += 1
+                    continue
+                
+                # Determinar hora de inicio
+                start_hour = 8.0  # Default
+                try:
+                    st_val = date_entry['time_field'].value.strip()
+                    if ":" in st_val:
+                        parts = st_val.split(":")
+                        h = int(parts[0])
+                        m = int(parts[1])
+                        start_hour = h + (m / 60.0)
+                except:
+                    pass  # Mantener default si falla
+                
+                # Crear objeto temporal para pasar a la API
+                entry_obj = TimeEntry(
+                    ticket_id, hours, description, selected_date,
+                    billable_option=billable_dropdown.value,
+                    add_to_detail=cb_discussion.value,
+                    add_to_internal=cb_internal.value,
+                    add_to_resolution=cb_resolution.value,
+                    email_resource=cb_resource.value,
+                    email_contact=cb_contact.value,
+                    email_cc=cb_cc.value
+                )
+                
+                # Enviar a la API
+                is_success, message = await api.post_time_entry(entry_obj, start_hour)
+                
+                if is_success:
+                    success_count += 1
+                    success_msg = f"✓ {date_str}: Ticket #{ticket_id} ({hours}h) - {message}"
+                    add_log(success_msg)
+                else:
+                    error_count += 1
+                    error_msg = f"✗ {date_str}: Ticket #{ticket_id} - {message}"
+                    add_log(error_msg, is_error=True)
             
-            if is_success:
-                # Actualizar tracker (ya se hizo arriba, pero confirmamos)
-                # day_tracker[date_key] += hours
-                
-                # Log y Feedback
-                success_msg = f"Ticket #{ticket_id} ({hours}h) - {message}"
-                add_log(success_msg)
-                show_snackbar("Entrada registrada exitosamente", ft.Colors.GREEN)
-                
+            # Resumen final
+            if success_count > 0 and error_count == 0:
+                show_snackbar(f"✓ {success_count} entrada(s) registrada(s) exitosamente", ft.Colors.GREEN)
                 # Limpiar campos
                 description_field.value = ""
+                ticket_field.value = ""
+                # Resetear a una sola fecha
+                date_entries.clear()
+                add_date_entry()
                 ticket_field.focus()
                 page.update()
+            elif success_count > 0 and error_count > 0:
+                show_snackbar(f"Parcial: {success_count} exitosas, {error_count} errores", ft.Colors.ORANGE)
             else:
-                error_msg = f"Error en Ticket #{ticket_id}: {message}"
-                add_log(error_msg, is_error=True)
-                show_snackbar(f"Error: {message}", ft.Colors.RED)
+                show_snackbar(f"Error: {error_count} entrada(s) fallaron", ft.Colors.RED)
                 
         except Exception as ex:
             show_snackbar(f"Error inesperado: {str(ex)}", ft.Colors.RED)
@@ -495,6 +572,7 @@ async def main(page: ft.Page):
             submit_btn.disabled = False
             submit_btn.text = "Registrar Entrada"
             submit_btn.update()
+
 
     
     def open_settings(e=None):
@@ -625,8 +703,6 @@ async def main(page: ft.Page):
                             
                             ft.Row([
                                 ticket_field,
-                                start_time_field,
-                                hours_field,
                                 billable_dropdown,
                             ], spacing=10, wrap=True),
                             
@@ -634,9 +710,21 @@ async def main(page: ft.Page):
                             
                             filters_row,
                             
-                            ft.Row([
-                                date_field,
-                            ], spacing=10),
+                            # Sección de fechas con título
+                            ft.Container(
+                                content=ft.Column([
+                                    ft.Row([
+                                        ft.Icon(ft.Icons.CALENDAR_MONTH, size=16),
+                                        ft.Text("Fecha", size=14, weight=ft.FontWeight.BOLD),
+                                        ft.Text(f"Rango: {min_date_str} a {max_date_str}", size=10, color=ft.Colors.GREY_600),
+                                    ], spacing=5),
+                                    date_entries_column,
+                                    add_date_btn,
+                                ], spacing=10),
+                                padding=10,
+                                bgcolor=ft.Colors.BLUE_50,
+                                border_radius=8,
+                            ),
                             
                             ft.Container(height=10),
                             
@@ -668,6 +756,7 @@ async def main(page: ft.Page):
             )
         )
     )
+
     
     # Abrir configuración automáticamente si faltan datos
     # if not config.is_complete():
