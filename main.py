@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
 import flet as ft
 import base64
 import json
@@ -580,7 +583,7 @@ async def main(page: ft.Page):
         # Credenciales de Usuario (Prioridad)
         user_credentials = ft.Column([
             ft.Text("Credenciales de Usuario", weight=ft.FontWeight.BOLD, size=16),
-            ft.TextField(label="Member ID", value=config.member_id, width=300, hint_text="Ej: amora"),
+            ft.TextField(label="Member ID", value=config.member_id, width=300, hint_text="Ej: username"),
             ft.TextField(label="Public Key", value=config.public_key, width=300, password=True, can_reveal_password=True),
             ft.TextField(label="Private Key", value=config.private_key, width=300, password=True, can_reveal_password=True),
         ], spacing=10)

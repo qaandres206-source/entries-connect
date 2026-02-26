@@ -79,3 +79,22 @@ flet build windows -v
 ```
 
 For more details on building Windows package, refer to the [Windows Packaging Guide](https://flet.dev/docs/publish/windows/).
+
+## Azure DevOps Deployment
+
+This project uses Azure Pipelines for CI/CD. The configuration is found in [`azure-pipelines.yml`](./azure-pipelines.yml).
+
+### Azure Setup Requirements
+
+To deploy this application to Azure App Service properly, you need to create a **Linux Web App** in Azure with the following settings:
+1.  **Runtime Stack**: `Python 3.11`
+2.  **OS**: Linux
+3.  **Startup Command**: Under **Configuration > General settings**, change the startup command to:
+    ```bash
+    python main.py
+    ```
+
+### Pipeline Variables Configuration
+In Azure DevOps, when editing the pipeline, make sure you update the placeholder variables in `azure-pipelines.yml` or set them up in the pipeline variables UI:
+- `azureServiceConnectionId`: Your Azure Resource Manager service connection.
+- `webAppName`: The name of your Azure App Service.
