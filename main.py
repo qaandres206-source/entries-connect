@@ -12,67 +12,10 @@ import asyncio
 # Use httpx for API calls
 import httpx
 import os
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import secrets
-
-
-class SecurityManager:
-    """Maneja la encriptación de credenciales"""
-    def __init__(self):
-        self.salt = b''
-        self.fernet: Optional[Fernet] = None
-
-    def generate_key_from_pin(self, pin: str, salt: bytes = None) -> bytes:
-        """Genera una clave de encriptación basada en el PIN"""
-        if salt is None:
-            salt = secrets.token_bytes(16)
-        self.salt = salt
-        
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=100000,
-        )
-        key = base64.urlsafe_b64encode(kdf.derive(pin.encode()))
-        return key
-
-    def initialize(self, pin: str, salt_hex: str = None) -> bool:
-        """Inicializa el sistema de seguridad con un PIN"""
-        try:
-            if salt_hex:
-                salt = bytes.fromhex(salt_hex)
-            else:
-                salt = secrets.token_bytes(16)
-            
-            key = self.generate_key_from_pin(pin, salt)
-            self.fernet = Fernet(key)
-            return True
-        except Exception as e:
-            print(f"Error initializing security: {e}")
-            return False
-
-    def encrypt(self, data: str) -> str:
-        """Encripta un string"""
-        if not self.fernet or not data: return data
-        return self.fernet.encrypt(data.encode()).decode()
-
-    def decrypt(self, data: str) -> str:
-        """Desencripta un string"""
-        if not self.fernet or not data: return data
-        try:
-            return self.fernet.decrypt(data.encode()).decode()
-        except:
-            return "" # Retorna vacío si falla la desencriptación
-
 class ConnectWiseConfig:
     """Configuración de ConnectWise"""
     def __init__(self, page: ft.Page):
         self.page = page
-        self.security = SecurityManager()
-        self.is_locked = True
         # Inicializar con valores por defecto, se cargarán con load()
         self.company_id = "Intwo"
         self.public_key = ""
@@ -84,30 +27,12 @@ class ConnectWiseConfig:
         self.client_id = "4332716b-7270-470d-b7c6-9c036f760e6f"
         self.timezone_offset = -4.0 # Default to Puerto Rico (UTC-4)
 
-    async def unlock(self, pin: str) -> bool:
-        """Intenta desbloquear la configuración con el PIN"""
-        salt_hex = await self.page.client_storage.get_async("security_salt")
-        if self.security.initialize(pin, salt_hex):
-            self.is_locked = False
-            await self.load()
-            return True
-        return False
-
     async def load(self):
         """Carga la configuración del almacenamiento local de forma asíncrona"""
         self.company_id = await self.page.client_storage.get_async("company_id") or "Intwo"
         
-        # Cargar claves encriptadas
-        enc_public = await self.page.client_storage.get_async("public_key") or ""
-        enc_private = await self.page.client_storage.get_async("private_key") or ""
-        
-        if not self.is_locked:
-            self.public_key = self.security.decrypt(enc_public)
-            self.private_key = self.security.decrypt(enc_private)
-        else:
-            # Si está bloqueado, mantenemos las versiones encriptadas o vacías
-            self.public_key = enc_public
-            self.private_key = enc_private
+        self.public_key = await self.page.client_storage.get_async("public_key") or ""
+        self.private_key = await self.page.client_storage.get_async("private_key") or ""
         self.site_url = await self.page.client_storage.get_async("site_url") or "connect.intwo.cloud"
         self.member_id = await self.page.client_storage.get_async("member_id") or ""
         self.work_type = await self.page.client_storage.get_async("work_type") or "Remote-Standard"
@@ -123,22 +48,14 @@ class ConnectWiseConfig:
         """Guarda la configuración en el almacenamiento local de forma asíncrona"""
         await self.page.client_storage.set_async("company_id", self.company_id)
         
-        # Guardar Salt si es nuevo
-        if self.security.salt:
-            await self.page.client_storage.set_async("security_salt", self.security.salt.hex())
-            
-        # Encriptar antes de guardar
-        if not self.is_locked:
-            enc_public = self.security.encrypt(self.public_key)
-            enc_private = self.security.encrypt(self.private_key)
-            await self.page.client_storage.set_async("public_key", enc_public)
-            await self.page.client_storage.set_async("private_key", enc_private)
-            await self.page.client_storage.set_async("site_url", self.site_url)
-            await self.page.client_storage.set_async("member_id", self.member_id)
-            await self.page.client_storage.set_async("work_type", self.work_type)
-            await self.page.client_storage.set_async("billable_option", self.billable_option)
-            await self.page.client_storage.set_async("client_id", self.client_id)
-            await self.page.client_storage.set_async("timezone_offset", self.timezone_offset)
+        await self.page.client_storage.set_async("public_key", self.public_key)
+        await self.page.client_storage.set_async("private_key", self.private_key)
+        await self.page.client_storage.set_async("site_url", self.site_url)
+        await self.page.client_storage.set_async("member_id", self.member_id)
+        await self.page.client_storage.set_async("work_type", self.work_type)
+        await self.page.client_storage.set_async("billable_option", self.billable_option)
+        await self.page.client_storage.set_async("client_id", self.client_id)
+        await self.page.client_storage.set_async("timezone_offset", self.timezone_offset)
 
     def is_complete(self) -> bool:
         """Verifica si la configuración crítica está completa"""
@@ -454,15 +371,15 @@ async def main(page: ft.Page):
     def add_log(message: str, is_error: bool = False):
         """Agrega un mensaje al log de sesión"""
         icon = ft.Icons.ERROR if is_error else ft.Icons.CHECK_CIRCLE
-        color = ft.Colors.RED_700 if is_error else ft.Colors.GREEN_700
+        color = "error" if is_error else "onSurfaceVariant"
         
         log_list.controls.insert(0, ft.Container(
             content=ft.Row([
                 ft.Icon(icon, color=color, size=16),
-                ft.Text(message, size=12, color=ft.Colors.GREY_800 if not is_error else ft.Colors.RED_900),
+                ft.Text(message, size=12, color=color),
             ]),
             padding=5,
-            bgcolor=ft.Colors.GREY_100 if not is_error else ft.Colors.RED_50,
+            bgcolor="errorContainer" if is_error else "surfaceVariant",
             border_radius=5,
         ))
         log_list.update()
@@ -490,8 +407,8 @@ async def main(page: ft.Page):
         submit_btn.text = "Enviando..."
         submit_btn.update()
         
-        success_count = 0
-        error_count = 0
+        success_count: int = 0
+        error_count: int = 0
         
         try:
             # Procesar cada fecha
@@ -545,11 +462,11 @@ async def main(page: ft.Page):
                 is_success, message = await api.post_time_entry(entry_obj, start_hour)
                 
                 if is_success:
-                    success_count += 1
+                    success_count += 1  # type: ignore
                     success_msg = f"✓ {date_str}: Ticket #{ticket_id} ({hours}h) - {message}"
                     add_log(success_msg)
                 else:
-                    error_count += 1
+                    error_count += 1  # type: ignore
                     error_msg = f"✗ {date_str}: Ticket #{ticket_id} - {message}"
                     add_log(error_msg, is_error=True)
             
@@ -580,36 +497,41 @@ async def main(page: ft.Page):
     
     def open_settings(e=None):
         """Abre el diálogo de configuración"""
+        # Instanciar controles de texto de forma directa
+        member_id_field = ft.TextField(label="Member ID", value=config.member_id, width=300, hint_text="Ej: username")
+        public_key_field = ft.TextField(label="Public Key", value=config.public_key, width=300, password=True, can_reveal_password=True)
+        private_key_field = ft.TextField(label="Private Key", value=config.private_key, width=300, password=True, can_reveal_password=True)
+
+        company_id_field = ft.TextField(label="Company ID", value=config.company_id, width=300, password=True, can_reveal_password=True)
+        site_url_field = ft.TextField(label="Site URL", value=config.site_url, width=300, password=True, can_reveal_password=True)
+        client_id_field = ft.TextField(label="Client ID", value=config.client_id, width=300, password=True, can_reveal_password=True)
+        timezone_field = ft.TextField(label="Timezone Offset", value=str(config.timezone_offset), width=300, hint_text="-4.0 para PR, -5.0 para COL", password=True, can_reveal_password=True)
+
         # Credenciales de Usuario (Prioridad)
         user_credentials = ft.Column([
             ft.Text("Credenciales de Usuario", weight=ft.FontWeight.BOLD, size=16),
-            ft.TextField(label="Member ID", value=config.member_id, width=300, hint_text="Ej: username"),
-            ft.TextField(label="Public Key", value=config.public_key, width=300, password=True, can_reveal_password=True),
-            ft.TextField(label="Private Key", value=config.private_key, width=300, password=True, can_reveal_password=True),
-        ], spacing=10)
+            member_id_field,
+            public_key_field,
+            private_key_field,
+        ], spacing=15)
 
         # Configuración General (Predefinida)
         general_config = ft.ExpansionTile(
             title=ft.Text("Configuración Avanzada"),
             subtitle=ft.Text("Company ID, Site URL, Client ID"),
             controls=[
-                ft.TextField(label="Company ID", value=config.company_id, width=300),
-                ft.TextField(label="Site URL", value=config.site_url, width=300),
-                ft.TextField(label="Client ID", value=config.client_id, width=300),
-                ft.TextField(label="Timezone Offset", value=str(config.timezone_offset), width=300, hint_text="-4.0 para PR, -5.0 para COL"),
+                ft.Container(
+                    content=ft.Column([
+                        company_id_field,
+                        site_url_field,
+                        client_id_field,
+                        timezone_field,
+                    ], spacing=15),
+                    padding=ft.padding.only(left=15, right=15, top=10, bottom=20)
+                )
             ],
             initially_expanded=False
         )
-
-        # Update references in save_settings
-        member_id_field = user_credentials.controls[1]
-        public_key_field = user_credentials.controls[2]
-        private_key_field = user_credentials.controls[3]
-        
-        company_id_field = general_config.controls[0]
-        site_url_field = general_config.controls[1]
-        client_id_field = general_config.controls[2]
-        timezone_field = general_config.controls[3]
         
         async def save_settings(se):
             config.company_id = company_id_field.value
@@ -719,13 +641,13 @@ async def main(page: ft.Page):
                                     ft.Row([
                                         ft.Icon(ft.Icons.CALENDAR_MONTH, size=16),
                                         ft.Text("Fecha", size=14, weight=ft.FontWeight.BOLD),
-                                        ft.Text(f"Rango: {min_date_str} a {max_date_str}", size=10, color=ft.Colors.GREY_600),
+                                        ft.Text(f"Rango: {min_date_str} a {max_date_str}", size=10, color="onSurfaceVariant"),
                                     ], spacing=5),
                                     date_entries_column,
                                     add_date_btn,
                                 ], spacing=10),
                                 padding=10,
-                                bgcolor=ft.Colors.BLUE_50,
+                                bgcolor="surfaceVariant",
                                 border_radius=8,
                             ),
                             
@@ -737,7 +659,7 @@ async def main(page: ft.Page):
                             
                         ], spacing=15),
                         padding=20,
-                        border=ft.border.all(1, ft.Colors.GREY_300),
+                        border=ft.border.all(1, "outlineVariant"),
                         border_radius=10,
                     ),
                     
@@ -748,9 +670,9 @@ async def main(page: ft.Page):
                     ft.Container(
                         content=log_list,
                         padding=10,
-                        bgcolor=ft.Colors.GREY_50,
+                        bgcolor="surfaceVariant",
                         border_radius=5,
-                        border=ft.border.all(1, ft.Colors.GREY_200)
+                        border=ft.border.all(1, "outlineVariant")
                     )
                     
                 ], spacing=20, scroll=ft.ScrollMode.AUTO),
@@ -760,71 +682,10 @@ async def main(page: ft.Page):
         )
     )
 
-    
-    # Abrir configuración automáticamente si faltan datos
-    # if not config.is_complete():
-    #    open_settings()
-
-    def show_pin_dialog(is_setup=False):
-        """Muestra el diálogo de PIN"""
-        pin_field = ft.TextField(label="PIN de Seguridad", password=True, width=200, autofocus=True, on_submit=lambda e: validate_pin())
-        error_text = ft.Text("", color=ft.Colors.RED, size=12)
-        
-        async def validate_pin(e=None):
-            pin = pin_field.value
-            if not pin:
-                error_text.value = "Ingresa un PIN"
-                error_text.update()
-                return
-                
-            if is_setup:
-                # Setup mode: Initialize with this PIN
-                if config.security.initialize(pin):
-                    config.is_locked = False
-                    # Save empty config to store salt/setup
-                    await config.save()
-                    page.close(pin_dialog)
-                    open_settings() # Go to settings to fill data
-                else:
-                    error_text.value = "Error al inicializar seguridad"
-                    error_text.update()
-            else:
-                # Unlock mode
-                if await config.unlock(pin):
-                    page.close(pin_dialog)
-                    show_snackbar("Desbloqueado correctamente", ft.Colors.GREEN)
-                    if not config.is_complete():
-                        open_settings()
-                else:
-                    error_text.value = "PIN Incorrecto"
-                    error_text.update()
-        
-        title = "🛡️ Configurar Seguridad" if is_setup else "🔒 Desbloquear"
-        content_text = "Crea un PIN para proteger tus claves." if is_setup else "Ingresa tu PIN para desbloquear."
-        
-        pin_dialog = ft.AlertDialog(
-            title=ft.Text(title),
-            content=ft.Column([
-                ft.Text(content_text),
-                pin_field,
-                error_text
-            ], tight=True),
-            actions=[
-                ft.ElevatedButton("Aceptar", on_click=validate_pin)
-            ],
-            modal=True
-        )
-        page.open(pin_dialog)
-
     # Lógica de inicio
-    # Verificar si ya existe un salt (indicador de que ya se configuró seguridad)
-    has_security = await page.client_storage.contains_key_async("security_salt")
-    
-    if has_security:
-        show_pin_dialog(is_setup=False)
-    else:
-        # Primera vez
-        show_pin_dialog(is_setup=True)
+    # Abrir configuración automáticamente si faltan datos
+    if not config.is_complete():
+        open_settings()
 
 
 
