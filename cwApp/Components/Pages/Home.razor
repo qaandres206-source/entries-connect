@@ -1,0 +1,472 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using cwApp.Models
+@using cwApp.Services
+@inject ConnectWiseService CwService
+@inject ConfigStorageService ConfigStorage
+@inject IJSRuntime JS
+
+<PageTitle>ConnectWise Time Entry</PageTitle>
+
+<div class="cw-app @(isDark ? "dark" : "light")">
+
+    <!-- HEADER / APP BAR -->
+    <header class="appbar">
+        <div class="appbar-left">
+            <span class="appbar-icon">⏱</span>
+            <span class="appbar-title">ConnectWise Time Entry</span>
+        </div>
+        <div class="appbar-actions">
+            <button class="icon-btn" @onclick="OpenSettings" title="Configuración">⚙️</button>
+            <button class="icon-btn" @onclick="ToggleTheme" title="Cambiar tema">
+                @(isDark ? "☀️" : "🌙")
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN CONTENT -->
+    <main class="cw-main">
+        <!-- FORM CARD -->
+        <div class="card form-card">
+            <h2 class="section-title">Nueva Entrada</h2>
+
+            <!-- Ticket + Billable Row -->
+            <div class="form-row wrap-row">
+                <div class="field-group">
+                    <label class="field-label">Ticket ID</label>
+                    <input class="cw-input" type="number" placeholder="Ej: 12345"
+                           @bind="ticketId" @bind:event="oninput" autofocus />
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Billable</label>
+                    <select class="cw-select" @bind="billableOption">
+                        <option value="Billable">Billable</option>
+                        <option value="DoNotBill">Do Not Bill</option>
+                        <option value="NoCharge">No Charge</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Description -->
+            <div class="field-group full-width">
+                <label class="field-label">Descripción</label>
+                <textarea class="cw-textarea" rows="3" placeholder="Descripción de la actividad"
+                          @bind="description" @bind:event="oninput"></textarea>
+            </div>
+
+            <!-- Checkboxes -->
+            <div class="checkbox-row">
+                <label class="cw-check">
+                    <input type="checkbox" @bind="addToDetail" />
+                    <span class="check-mark"></span>
+                    Discussion
+                </label>
+                <label class="cw-check">
+                    <input type="checkbox" @bind="addToInternal" />
+                    <span class="check-mark"></span>
+                    Internal
+                </label>
+                <label class="cw-check">
+                    <input type="checkbox" @bind="addToResolution" />
+                    <span class="check-mark"></span>
+                    Resolution
+                </label>
+                <div class="divider-v"></div>
+                <span class="notify-label">Notify:</span>
+                <label class="cw-check">
+                    <input type="checkbox" @bind="emailResource" />
+                    <span class="check-mark"></span>
+                    Resource
+                </label>
+                <label class="cw-check">
+                    <input type="checkbox" @bind="emailContact" />
+                    <span class="check-mark"></span>
+                    Contact
+                </label>
+                <label class="cw-check">
+                    <input type="checkbox" @bind="emailCc" />
+                    <span class="check-mark"></span>
+                    CC
+                </label>
+            </div>
+
+            <!-- Dates Section -->
+            <div class="dates-section">
+                <div class="dates-header">
+                    <span class="dates-icon">📅</span>
+                    <span class="dates-title">Fechas</span>
+                    <span class="dates-range">Rango: @minDateStr a @maxDateStr</span>
+                </div>
+
+                @foreach (var entry in dateEntries)
+                {
+                    <div class="date-row" @key="entry.Id">
+                        <div class="field-group">
+                            <label class="field-label">Fecha</label>
+                            <input class="cw-input date-input" type="date"
+                                   value="@entry.Date"
+                                   min="@minDateStr"
+                                   max="@maxDateStr"
+                                   @onchange="@(e => entry.Date = e.Value?.ToString() ?? entry.Date)" />
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Hora Inicio</label>
+                            <input class="cw-input time-input" type="time"
+                                   value="@entry.StartTime"
+                                   @onchange="@(e => entry.StartTime = e.Value?.ToString() ?? entry.StartTime)" />
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Horas</label>
+                            <input class="cw-input hours-input" type="number"
+                                   step="0.25" min="0.25" max="8"
+                                   value="@entry.Hours"
+                                   @onchange="@(e => { if(double.TryParse(e.Value?.ToString(), out var h)) entry.Hours = h; })" />
+                        </div>
+                        @if (dateEntries.Count > 1)
+                        {
+                            <button class="remove-btn" @onclick="() => RemoveDateEntry(entry)" title="Eliminar fecha">✖</button>
+                        }
+                    </div>
+                }
+
+                <button class="add-date-btn" @onclick="AddDateEntry">
+                    <span>➕</span> Agregar fecha
+                </button>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="submit-row">
+                <button class="submit-btn @(isSubmitting ? "submitting" : "")"
+                        @onclick="SubmitEntry"
+                        disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner"></span>
+                        <span>Enviando...</span>
+                    }
+                    else
+                    {
+                        <span>🚀 Registrar Entrada</span>
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- SESSION LOG -->
+        <div class="card log-card">
+            <h3 class="section-title">📋 Log de Sesión (Recientes)</h3>
+            <div class="log-container">
+                @if (!sessionLog.Any())
+                {
+                    <div class="log-empty">No hay entradas en este sesión</div>
+                }
+                @foreach (var log in sessionLog)
+                {
+                    <div class="log-entry @(log.IsError ? "log-error" : "log-success")">
+                        <span class="log-icon">@(log.IsError ? "✗" : "✓")</span>
+                        <span class="log-msg">@log.Message</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- SNACKBAR -->
+@if (snackbarVisible)
+{
+    <div class="snackbar @snackbarClass">
+        @snackbarMessage
+    </div>
+}
+
+<!-- SETTINGS MODAL -->
+@if (settingsOpen)
+{
+    <div class="modal-overlay" @onclick="CloseSettings">
+        <div class="modal-box" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <span>⚙️ Configuración</span>
+                <button class="modal-close" @onclick="CloseSettings">✖</button>
+            </div>
+            <div class="modal-body">
+                <h4 class="config-section-title">Credenciales de Usuario</h4>
+                <div class="field-group">
+                    <label class="field-label">Member ID</label>
+                    <input class="cw-input" type="text" placeholder="Ej: username" @bind="editConfig.MemberId" />
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Public Key</label>
+                    <input class="cw-input" type="@(showPublicKey ? "text" : "password")"
+                           @bind="editConfig.PublicKey" />
+                    <button class="reveal-btn" @onclick='() => showPublicKey = !showPublicKey'>
+                        @(showPublicKey ? "🙈" : "👁")
+                    </button>
+                </div>
+                <div class="field-group">
+                    <label class="field-label">Private Key</label>
+                    <input class="cw-input" type="@(showPrivateKey ? "text" : "password")"
+                           @bind="editConfig.PrivateKey" />
+                    <button class="reveal-btn" @onclick='() => showPrivateKey = !showPrivateKey'>
+                        @(showPrivateKey ? "🙈" : "👁")
+                    </button>
+                </div>
+
+                <details class="advanced-config">
+                    <summary>⚙ Configuración Avanzada <small>Company ID, Site URL, Client ID</small></summary>
+                    <div class="advanced-body">
+                        <div class="field-group">
+                            <label class="field-label">Company ID</label>
+                            <input class="cw-input" type="@(showAdvanced ? "text" : "password")" @bind="editConfig.CompanyId" />
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Site URL</label>
+                            <input class="cw-input" type="@(showAdvanced ? "text" : "password")" @bind="editConfig.SiteUrl" />
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Client ID</label>
+                            <input class="cw-input" type="@(showAdvanced ? "text" : "password")" @bind="editConfig.ClientId" />
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Timezone Offset</label>
+                            <input class="cw-input" type="@(showAdvanced ? "text" : "password")"
+                                   placeholder="-4.0 para PR, -5.0 para COL"
+                                   value="@editConfig.TimezoneOffset.ToString()"
+                                   @onchange="@(e => { if(double.TryParse(e.Value?.ToString(), out var t)) editConfig.TimezoneOffset = t; })" />
+                        </div>
+                        <button class="reveal-adv-btn" @onclick='() => showAdvanced = !showAdvanced'>
+                            @(showAdvanced ? "🙈 Ocultar" : "👁 Mostrar valores")
+                        </button>
+                    </div>
+                </details>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" @onclick="CloseSettings">Cancelar</button>
+                <button class="btn-save" @onclick="SaveSettings">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    // ---- State ----
+    private ConnectWiseConfig config = new();
+    private ConnectWiseConfig editConfig = new();
+    private List<DateEntry> dateEntries = new();
+    private List<SessionLogEntry> sessionLog = new();
+
+    private string ticketId = "";
+    private string description = "";
+    private string billableOption = "DoNotBill";
+    private bool addToDetail = false;
+    private bool addToInternal = true;
+    private bool addToResolution = false;
+    private bool emailResource = false;
+    private bool emailContact = false;
+    private bool emailCc = false;
+
+    private bool isSubmitting = false;
+    private bool isDark = false;
+    private bool settingsOpen = false;
+    private bool showPublicKey = false;
+    private bool showPrivateKey = false;
+    private bool showAdvanced = false;
+
+    // Snackbar
+    private bool snackbarVisible = false;
+    private string snackbarMessage = "";
+    private string snackbarClass = "snackbar-success";
+    private CancellationTokenSource? snackCts;
+
+    // Date range
+    private string minDateStr = "";
+    private string maxDateStr = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Date range
+        var today = DateTime.Today;
+        maxDateStr = today.ToString("yyyy-MM-dd");
+        var firstPrevMonth = today.Month == 1
+            ? new DateTime(today.Year - 1, 12, 1)
+            : new DateTime(today.Year, today.Month - 1, 1);
+        minDateStr = firstPrevMonth.ToString("yyyy-MM-dd");
+
+        // Add first entry
+        AddDateEntry();
+
+        // Load config
+        config = await ConfigStorage.LoadAsync();
+
+        if (!config.IsComplete())
+        {
+            OpenSettings();
+        }
+    }
+
+    private void AddDateEntry()
+    {
+        dateEntries.Add(new DateEntry
+        {
+            Date = DateTime.Today.ToString("yyyy-MM-dd"),
+            StartTime = "08:00",
+            Hours = 1.0
+        });
+    }
+
+    private void RemoveDateEntry(DateEntry entry)
+    {
+        dateEntries.Remove(entry);
+    }
+
+    private void ToggleTheme() => isDark = !isDark;
+
+    private void OpenSettings()
+    {
+        // Clone config for editing
+        editConfig = new ConnectWiseConfig
+        {
+            CompanyId = config.CompanyId,
+            PublicKey = config.PublicKey,
+            PrivateKey = config.PrivateKey,
+            SiteUrl = config.SiteUrl,
+            MemberId = config.MemberId,
+            WorkType = config.WorkType,
+            BillableOption = config.BillableOption,
+            ClientId = config.ClientId,
+            TimezoneOffset = config.TimezoneOffset
+        };
+        showPublicKey = false;
+        showPrivateKey = false;
+        showAdvanced = false;
+        settingsOpen = true;
+    }
+
+    private void CloseSettings() => settingsOpen = false;
+
+    private async Task SaveSettings()
+    {
+        config = editConfig;
+        await ConfigStorage.SaveAsync(config);
+        settingsOpen = false;
+        await ShowSnackbar("✓ Configuración guardada", "success");
+    }
+
+    private async Task SubmitEntry()
+    {
+        if (string.IsNullOrWhiteSpace(ticketId))
+        {
+            await ShowSnackbar("⚠ Por favor ingresa un Ticket ID", "error");
+            return;
+        }
+        if (!dateEntries.Any())
+        {
+            await ShowSnackbar("⚠ Debe haber al menos una fecha", "error");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            await ShowSnackbar("⚠ Por favor ingresa una descripción", "error");
+            return;
+        }
+
+        isSubmitting = true;
+        int successCount = 0, errorCount = 0;
+
+        foreach (var dateEntry in dateEntries.ToList())
+        {
+            if (!DateTime.TryParse(dateEntry.Date, out var selectedDate))
+            {
+                AddLog($"Fecha inválida: {dateEntry.Date}", isError: true);
+                errorCount++;
+                continue;
+            }
+
+            if (dateEntry.Hours <= 0 || dateEntry.Hours > 8)
+            {
+                AddLog($"Horas inválidas para {dateEntry.Date}: {dateEntry.Hours}", isError: true);
+                errorCount++;
+                continue;
+            }
+
+            // Parse start time HH:MM → decimal hour
+            double startHour = 8.0;
+            if (!string.IsNullOrWhiteSpace(dateEntry.StartTime))
+            {
+                var parts = dateEntry.StartTime.Split(':');
+                if (parts.Length >= 2 && int.TryParse(parts[0], out var h) && int.TryParse(parts[1], out var m))
+                    startHour = h + (m / 60.0);
+            }
+
+            var result = await CwService.PostTimeEntryAsync(
+                config, ticketId, dateEntry.Hours, description, selectedDate, startHour,
+                billableOption, addToDetail, addToInternal, addToResolution,
+                emailResource, emailContact, emailCc);
+
+            if (result.Success)
+            {
+                successCount++;
+                AddLog($"✓ {dateEntry.Date}: Ticket #{ticketId} ({dateEntry.Hours}h) - {result.Message}");
+            }
+            else
+            {
+                errorCount++;
+                AddLog($"✗ {dateEntry.Date}: Ticket #{ticketId} - {result.Message}", isError: true);
+            }
+        }
+
+        isSubmitting = false;
+
+        if (successCount > 0 && errorCount == 0)
+        {
+            await ShowSnackbar($"✓ {successCount} entrada(s) registrada(s) exitosamente", "success");
+            // Reset form
+            ticketId = "";
+            description = "";
+            dateEntries.Clear();
+            AddDateEntry();
+        }
+        else if (successCount > 0)
+        {
+            await ShowSnackbar($"Parcial: {successCount} exitosas, {errorCount} errores", "warning");
+        }
+        else
+        {
+            await ShowSnackbar($"✗ Error: {errorCount} entrada(s) fallaron", "error");
+        }
+    }
+
+    private void AddLog(string message, bool isError = false)
+    {
+        sessionLog.Insert(0, new SessionLogEntry
+        {
+            Message = message,
+            IsError = isError,
+            Timestamp = DateTime.Now
+        });
+    }
+
+    private async Task ShowSnackbar(string message, string type = "success")
+    {
+        snackCts?.Cancel();
+        snackCts = new CancellationTokenSource();
+
+        snackbarMessage = message;
+        snackbarClass = type switch
+        {
+            "error" => "snackbar-error",
+            "warning" => "snackbar-warning",
+            _ => "snackbar-success"
+        };
+        snackbarVisible = true;
+        StateHasChanged();
+
+        try
+        {
+            await Task.Delay(3500, snackCts.Token);
+            snackbarVisible = false;
+            StateHasChanged();
+        }
+        catch (TaskCanceledException) { }
+    }
+}

@@ -2,81 +2,97 @@ trigger:
   - main
 
 variables:
-  # Azure Resource Manager connection created during pipeline creation
+  # Azure Resource Manager connection created during pipeline setup
   azureServiceConnectionId: 'YOUR_SERVICE_CONNECTION_ID'
-  
-  # Web app name
+
+  # Azure Web App name (Windows or Linux App Service)
   webAppName: 'YOUR_WEB_APP_NAME'
-  
-  # Environment name
+
+  # Environment name (for approvals / deployment tracking)
   environmentName: 'YOUR_WEB_APP_NAME'
 
-  # Project root folder. Point to the directory containing main.py
-  projectRoot: $(System.DefaultWorkingDirectory)
-  
-  # Python version: 3.11 is used to match your render.yaml
-  pythonVersion: '3.11'
+  # Solution / project paths
+  solution: 'cwApp.sln'
+  serverProject: 'cwApp/cwApp.csproj'
+
+  # Build configuration
+  buildConfiguration: 'Release'
+
+  # .NET SDK version (matches cwApp.csproj TargetFramework net9.0)
+  dotnetVersion: '9.0.x'
+
+  # Publish output folder
+  publishOutput: '$(Build.ArtifactStagingDirectory)/publish'
 
 stages:
+  # ─────────────────────────────────────────
+  # BUILD STAGE
+  # ─────────────────────────────────────────
   - stage: Build
-    displayName: Build stage
+    displayName: 'Build .NET 9 Blazor App'
     jobs:
       - job: BuildJob
+        displayName: 'Restore, Build & Publish'
         pool:
-          vmImage: ubuntu-latest
+          vmImage: 'ubuntu-latest'
         steps:
-          - task: UsePythonVersion@0
+          - task: UseDotNet@2
+            displayName: 'Install .NET SDK $(dotnetVersion)'
             inputs:
-              versionSpec: '$(pythonVersion)'
-            displayName: 'Use Python $(pythonVersion)'
-            
-          - script: |
-              python -m venv antenv
-              source antenv/bin/activate
-              python -m pip install --upgrade pip
-              pip install setup
-              pip install -r requirements.txt
-            workingDirectory: $(projectRoot)
-            displayName: "Install requirements"
-            
-          - task: ArchiveFiles@2
-            displayName: 'Archive files'
+              packageType: 'sdk'
+              version: '$(dotnetVersion)'
+
+          - task: DotNetCoreCLI@2
+            displayName: 'Restore NuGet packages'
             inputs:
-              rootFolderOrFile: '$(projectRoot)'
-              includeRootFolder: false
-              archiveType: zip
-              archiveFile: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-              replaceExistingArchive: true
+              command: 'restore'
+              projects: '$(solution)'
 
-          - upload: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
-            displayName: 'Upload package'
-            artifact: drop
+          - task: DotNetCoreCLI@2
+            displayName: 'Build solution ($(buildConfiguration))'
+            inputs:
+              command: 'build'
+              projects: '$(solution)'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
 
+          - task: DotNetCoreCLI@2
+            displayName: 'Publish server project'
+            inputs:
+              command: 'publish'
+              publishWebProjects: false
+              projects: '$(serverProject)'
+              arguments: '--configuration $(buildConfiguration) --no-build --output $(publishOutput)'
+              zipAfterPublish: true
+
+          - task: PublishBuildArtifacts@1
+            displayName: 'Upload artifact: drop'
+            inputs:
+              PathtoPublish: '$(publishOutput)'
+              ArtifactName: 'drop'
+              publishLocation: 'Container'
+
+  # ─────────────────────────────────────────
+  # DEPLOY STAGE
+  # ─────────────────────────────────────────
   - stage: Deploy
-    displayName: 'Deploy Web App'
+    displayName: 'Deploy to Azure App Service'
     dependsOn: Build
     condition: succeeded()
     jobs:
       - deployment: DeploymentJob
+        displayName: 'Deploy Blazor App'
         pool:
-          vmImage: ubuntu-latest
-        environment: $(environmentName)
+          vmImage: 'ubuntu-latest'
+        environment: '$(environmentName)'
         strategy:
           runOnce:
             deploy:
               steps:
-                - task: UsePythonVersion@0
-                  inputs:
-                    versionSpec: '$(pythonVersion)'
-                  displayName: 'Use Python $(pythonVersion)'
-
                 - task: AzureWebApp@1
-                  displayName: 'Deploy Azure Web App : $(webAppName)'
+                  displayName: 'Deploy to Azure Web App: $(webAppName)'
                   inputs:
-                    azureSubscription: $(azureServiceConnectionId)
-                    appName: $(webAppName)
-                    package: $(Pipeline.Workspace)/drop/$(Build.BuildId).zip
-                    appType: webAppLinux
-                    # Oryx will build the app, but since we rely on the zip
-                    # App Service runs our startup command automatically.
-                    # We can specify 'python main.py' as the explicit start command in the Azure Portal
+                    azureSubscription: '$(azureServiceConnectionId)'
+                    appType: 'webAppLinux'
+                    appName: '$(webAppName)'
+                    package: '$(Pipeline.Workspace)/drop/**/*.zip'
+                    runtimeStack: 'DOTNETCORE|9.0'
