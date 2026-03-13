@@ -4,12 +4,12 @@ trigger:
 variables:
   # ── Variables from Azure DevOps Variable Group ──
   # You need to define the following variables in the 'azure-static-web-apps-polite-mud-0442eb20f-variable-group' variable group:
-  # - azureServiceConnectionId (your Azure service connection name)
-  # - webAppName (the name of your Azure App Service)
+  # - AZURE_SERVICE_CONNECTION_ID (your Azure service connection name)
+  # - WEB_APP_NAME (the name of your Azure App Service)
   - group: 'azure-static-web-apps-polite-mud-0442eb20f-variable-group'
 
   # ── Inline variables (build config, no secrets) ──
-  - name: environmentName
+  - name: ENVIRONMENT_NAME
     value: 'Production' # You can change this to 'Development' or another name if preferred
   - name: solution
     value: 'cwApp.sln'
@@ -81,16 +81,16 @@ stages:
         displayName: 'Deploy Blazor App'
         pool:
           vmImage: 'ubuntu-latest'
-        environment: '$(environmentName)'
+        environment: '$(ENVIRONMENT_NAME)'
         strategy:
           runOnce:
             deploy:
               steps:
                 - task: AzureWebApp@1
-                  displayName: 'Deploy to Azure Web App: $(webAppName)'
+                  displayName: 'Deploy to Azure Web App: $(WEB_APP_NAME)'
                   inputs:
-                    azureSubscription: '$(azureServiceConnectionId)'
+                    azureSubscription: '$(AZURE_SERVICE_CONNECTION_ID)'
                     appType: 'webAppLinux'
-                    appName: '$(webAppName)'
+                    appName: '$(WEB_APP_NAME)'
                     package: '$(Pipeline.Workspace)/drop/**/*.zip'
                     runtimeStack: 'DOTNETCORE|9.0'
