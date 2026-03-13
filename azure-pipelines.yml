@@ -89,8 +89,8 @@ stages:
                 - task: AzureWebApp@1
                   displayName: 'Deploy to Azure Web App: $(WEB_APP_NAME)'
                   inputs:
-                    azureSubscription: '$(AZURE_SERVICE_CONNECTION_ID)'
+                    azureSubscription: 'AzureServiceConnection'
                     appType: 'webAppLinux'
-                    appName: '$(WEB_APP_NAME)'
+                    appName: 'ControlPanelPSA'
                     package: '$(Pipeline.Workspace)/drop/**/*.zip'
                     runtimeStack: 'DOTNETCORE|9.0'
