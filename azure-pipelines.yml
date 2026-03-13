@@ -3,13 +3,14 @@ trigger:
 
 variables:
   # ── Variables from Azure DevOps Variable Group ──
-    # You need to define the following variables in the 'azure-static-web-apps-polite-mud-0442eb20f-variable-group' variable group:
+  # You need to define the following variables in the 'azure-static-web-apps-polite-mud-0442eb20f-variable-group' variable group:
   # - azureServiceConnectionId (your Azure service connection name)
   # - webAppName (the name of your Azure App Service)
-  # - environmentName (e.g., Development, Production)
   - group: 'azure-static-web-apps-polite-mud-0442eb20f-variable-group'
 
   # ── Inline variables (build config, no secrets) ──
+  - name: environmentName
+    value: 'Production' # You can change this to 'Development' or another name if preferred
   - name: solution
     value: 'cwApp.sln'
   - name: serverProject
