@@ -3,9 +3,11 @@ trigger:
 
 variables:
   # ── Variables from Azure DevOps Variable Group ──
-  # AzureServiceConnectionId, WebAppName, EnvironmentName
-  # are defined in the 'EntriesConnectApp-Config' variable group
-  - group: 'EntriesConnectApp-Config'
+    # You need to define the following variables in the 'azure-static-web-apps-polite-mud-0442eb20f-variable-group' variable group:
+  # - azureServiceConnectionId (your Azure service connection name)
+  # - webAppName (the name of your Azure App Service)
+  # - environmentName (e.g., Development, Production)
+  - group: 'azure-static-web-apps-polite-mud-0442eb20f-variable-group'
 
   # ── Inline variables (build config, no secrets) ──
   - name: solution
@@ -78,16 +80,16 @@ stages:
         displayName: 'Deploy Blazor App'
         pool:
           vmImage: 'ubuntu-latest'
-        environment: '$(EnvironmentName)'
+        environment: '$(environmentName)'
         strategy:
           runOnce:
             deploy:
               steps:
                 - task: AzureWebApp@1
-                  displayName: 'Deploy to Azure Web App: $(WebAppName)'
+                  displayName: 'Deploy to Azure Web App: $(webAppName)'
                   inputs:
-                    azureSubscription: '$(AzureServiceConnectionId)'
+                    azureSubscription: '$(azureServiceConnectionId)'
                     appType: 'webAppLinux'
-                    appName: '$(WebAppName)'
+                    appName: '$(webAppName)'
                     package: '$(Pipeline.Workspace)/drop/**/*.zip'
                     runtimeStack: 'DOTNETCORE|9.0'
