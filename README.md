@@ -1,257 +1,129 @@
 # ⏱ ConnectWise Time Entry App
 
-Aplicación web **Blazor** (.NET 9) para registrar entradas de tiempo en ConnectWise Manage directamente desde el navegador. Soporta modo oscuro/claro, múltiples fechas por envío, y almacena la configuración en el `localStorage` del navegador (sin base de datos).
+[![.NET 9](https://img.shields.io/badge/.NET-9.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet/9.0)
+[![Blazor](https://img.shields.io/badge/Framework-Blazor-purple.svg)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
+[![Build & Deploy](https://img.shields.io/badge/CI%2FCD-Azure%20Pipelines-green.svg)](azure-pipelines.yml)
+
+Una aplicación web moderna y ligera construida con **Blazor (.NET 9)** diseñada para optimizar el registro de entradas de tiempo en **ConnectWise Manage**. Permite a los consultores registrar múltiples fechas y entradas para un mismo ticket de forma masiva, directamente desde el navegador.
 
 ---
 
-## 🚀 Cómo ejecutar el proyecto
+## ✨ Características Principales
 
-### Prerequisitos
-
-| Herramienta | Versión mínima | Verificar |
-|---|---|---|
-| [.NET SDK](https://dotnet.microsoft.com/download) | 9.0 | `dotnet --version` |
-| Visual Studio 2022 | 17.8+ | — |
-| **o** VS Code + extensión C# Dev Kit | — | — |
-
----
-
-### Opción A – Línea de comandos (recomendado)
-
-```bash
-# 1. Clonar / abrir el directorio raíz del proyecto
-cd c:\Users\AndresFMora\code\csapp\cwApp
-
-# 2. Restaurar dependencias
-dotnet restore
-
-# 3. Ejecutar el proyecto servidor (cwApp)
-dotnet run --project cwApp/cwApp.csproj
-```
-
-La aplicación arranca en modo desarrollo en:
-- **http://localhost:5248** (HTTP)
-
-> El puerto exacto aparece en la consola al iniciar. 
-> `Now listening on: https://localhost:5248`
+- 📁 **Registro Masivo**: Agregue múltiples entradas de tiempo a un solo ticket en una sola operación.
+- 🌓 **Modo Oscuro/Claro**: Interfaz adaptativa para cualquier preferencia visual.
+- 🔒 **Privacidad Primero**: Toda la configuración se almacena localmente en el navegador (`localStorage`). **Sin base de datos centralizada**.
+- 🚀 **Validaciones en Tiempo Real**: Prevención de errores en Ticket ID, descripción y rangos de horas.
+- 📋 **Log de Sesión**: Historial visual de las operaciones realizadas durante la sesión actual.
+- 🛠️ **Configuración Flexible**: Soporte para Timezone Offsets y múltiples opciones de facturación.
 
 ---
 
-### Opción B – Visual Studio 2022
+## 🏗️ Arquitectura del Sistema
 
-1. Abrir `cwApp.sln`
-2. Asegurarse de que el proyecto de inicio sea **`cwApp`** (el servidor)
-3. Presionar **F5** o el botón ▶ *https*
+El proyecto utiliza un modelo de **Blazor Web App** con modos de renderizado interactivos (Server + WebAssembly).
 
----
-
-### Opción C – VS Code
-
-1. Abrir la carpeta `cwApp/` en VS Code
-2. Instalar la extensión **C# Dev Kit**
-3. Abrir la paleta de comandos → **.NET: Run project**
-4. Seleccionar `cwApp/cwApp.csproj`
-
----
-
-### Primera vez: Configurar credenciales
-
-Al abrir la app por primera vez (o si el `localStorage` está vacío), el modal de **Configuración** se abrirá automáticamente. Debes ingresar:
-
-| Campo | Descripción |
-|---|---|
-| **Member ID** | Tu nombre de usuario en ConnectWise |
-| **Public Key** | Llave pública de tu API key en CW |
-| **Private Key** | Llave privada de tu API key en CW |
-| **Company ID** | Identificador de la empresa (ej: `Intwo`) |
-| **Site URL** | URL del servidor CW (ej: `connect.intwo.cloud`) |
-| **Client ID** | GUID del Client ID registrado en CW |
-| **Timezone Offset** | Diferencia UTC (ej: `-4.0` para PR, `-5.0` para COL) |
-
-Los datos se guardan en `localStorage` del navegador y **nunca salen del equipo** hacia ningún servidor propio.
-
----
-
-## 🏗️ Arquitectura del Proyecto
-
-```
+### Estructura de la Solución
+```text
 cwApp.sln
-├── cwApp/                          ← Proyecto servidor (ASP.NET Core + Blazor Server)
-│   ├── Program.cs                  ← Entry point, DI, pipeline HTTP
-│   ├── appsettings.json            ← Configuración de logging
-│   ├── Components/
-│   │   ├── App.razor               ← Componente raíz Blazor
-│   │   ├── Routes.razor            ← Router de la app
-│   │   ├── _Imports.razor          ← Usings globales
-│   │   ├── Layout/
-│   │   │   ├── MainLayout.razor    ← Layout principal
-│   │   │   └── MainLayout.razor.css
-│   │   └── Pages/
-│   │       ├── Home.razor          ← Página principal (UI + lógica)
-│   │       └── Error.razor         ← Página de error
-│   ├── Models/
-│   │   └── TimeEntryModels.cs      ← Modelos de datos
-│   └── Services/
-│       ├── ConnectWiseService.cs   ← Cliente HTTP hacia ConnectWise API
-│       └── ConfigStorageService.cs ← Lectura/escritura en localStorage
-│
-└── cwApp.Client/                   ← Proyecto cliente (Blazor WebAssembly)
-    ├── Program.cs                  ← Entry point WASM
-    └── _Imports.razor              ← Usings globales WASM
+├── cwApp/                          ← Proyecto Servidor (ASP.NET Core)
+│   ├── Components/                 ← UI (Home, Pages, Layout)
+│   ├── Services/                   ← Lógica (ConnectWise API, Storage)
+│   └── Program.cs                  ← Configuración de DI y Pipeline
+└── cwApp.Client/                   ← Proyecto Cliente (WASM Integration)
 ```
 
----
-
-## 🗺️ Diagrama de Arquitectura
-
+### Flujo de Operación
 ```mermaid
 graph TD
-    subgraph Browser["🌐 Navegador"]
-        UI["Home.razor\n(UI + Lógica de página)"]
-        LS["localStorage\n(config persistida)"]
+    subgraph ClientSide ["🌐 Lado del Cliente (Browser)"]
+        UI["Blazor UI (Home.razor)"]
+        LS[("LocalStorage\nConfig Persistente")]
     end
 
-    subgraph Server["🖥️ Servidor ASP.NET Core (.NET 9)"]
-        PRG["Program.cs\n(DI + Pipeline HTTP)"]
+    subgraph ServerSide ["🖥️ Lado del Servidor (.NET 9)"]
         CWS["ConnectWiseService\n(HTTP Client)"]
         CSS["ConfigStorageService\n(JS Interop)"]
-        MDL["Models\nConnectWiseConfig\nTimeEntryPayload\nDateEntry\nSessionLogEntry\nApiResult"]
     end
 
-    subgraph CW["☁️ ConnectWise Manage (Externo)"]
-        API["REST API v3\n/time/entries"]
+    subgraph External ["☁️ Nube / Externo"]
+        CWA["ConnectWise Manage API"]
+        AZPD["Azure Pipelines\n(CI/CD)"]
+        AZWA["Azure App Service"]
     end
 
-    UI -- "Inicia envío\nSubmitEntry()" --> CWS
-    UI -- "Guarda / Lee config" --> CSS
-    CSS -- "JS Interop\nlocalStorage.getItem/setItem" --> LS
-    CWS -- "POST /time/entries\nBasic Auth + clientId" --> API
-    PRG -- "Registra Scoped" --> CWS
-    PRG -- "Registra Scoped" --> CSS
-    MDL -. "Usados por" .-> CWS
-    MDL -. "Usados por" .-> UI
-    MDL -. "Usados por" .-> CSS
+    UI -- "1. Lee/Guarda Config" --> CSS
+    CSS -- "JS Interop" --> LS
+    UI -- "2. Submit Entry" --> CWS
+    CWS -- "3. REST API POST" --> CWA
+    
+    AZPD -- "📦 Build & Publish" --> AZPD
+    AZPD -- "🚀 Deploy" --> AZWA
 ```
-
----
-
-## 📦 Modelos de datos
-
-### `ConnectWiseConfig`
-Almacena la configuración de conexión al servidor CW.
-
-| Propiedad | Tipo | Default | Descripción |
-|---|---|---|---|
-| `CompanyId` | `string` | `"Intwo"` | Identificador de empresa en CW |
-| `PublicKey` | `string` | `""` | Llave pública API |
-| `PrivateKey` | `string` | `""` | Llave privada API |
-| `SiteUrl` | `string` | `"connect.intwo.cloud"` | Hostname del servidor CW |
-| `MemberId` | `string` | `""` | Usuario del técnico |
-| `WorkType` | `string` | `"Remote-Standard"` | Tipo de trabajo |
-| `BillableOption` | `string` | `"DoNotBill"` | Opción de facturación |
-| `ClientId` | `string` | GUID | Client ID registrado en CW |
-| `TimezoneOffset` | `double` | `-4.0` | Offset UTC para ajuste de horario |
-
-### `DateEntry`
-Representa una entrada individual de fecha/hora para envío masivo.
-
-| Propiedad | Tipo | Descripción |
-|---|---|---|
-| `Date` | `string` | Fecha en formato `yyyy-MM-dd` |
-| `StartTime` | `string` | Hora inicio en formato `HH:mm` |
-| `Hours` | `double` | Cantidad de horas (0.25 – 8.0) |
-| `Id` | `Guid` | Identificador único para el key de Blazor |
-
-### `ApiResult`
-Resultado de cada llamada a la API de CW.
-
-| Propiedad | Tipo | Descripción |
-|---|---|---|
-| `Success` | `bool` | `true` si el POST fue exitoso |
-| `Message` | `string` | Mensaje descriptivo del resultado |
-
----
-
-## 🔧 Servicios
-
-### `ConnectWiseService`
-- **Responsabilidad**: Enviar entradas de tiempo a ConnectWise via REST API.  
-- **Endpoint**: `POST https://{SiteUrl}/v4_6_release/apis/3.0/time/entries`
-- **Autenticación**: `Basic Auth` — Base64 de `{CompanyId}+{PublicKey}:{PrivateKey}` + header `clientId`
-- **Ajuste de Timezone**: Convierte la hora local usando `TimezoneOffset` antes de enviar al servidor.
-
-### `ConfigStorageService`
-- **Responsabilidad**: Persistir y recuperar la configuración del usuario usando `localStorage` del browser.
-- **Mecanismo**: JS Interop (IJSRuntime) → `localStorage.getItem` / `localStorage.setItem`
-- **Claves guardadas**: `cw_company_id`, `cw_public_key`, `cw_private_key`, `cw_site_url`, `cw_member_id`, `cw_work_type`, `cw_billable_option`, `cw_client_id`, `cw_timezone_offset`
-
----
-
-## 🖥️ Flujo de la Aplicación
-
-```
-Inicio
-  │
-  ▼
-OnInitializedAsync()
-  ├─ Calcula rango de fechas permitido (mes anterior → hoy)
-  ├─ Crea primera DateEntry por defecto
-  └─ Carga configuración desde localStorage
-        │
-        ├── Config incompleta → Abre modal de Configuración automáticamente
-        └── Config completa  → La UI está lista para usar
-
-Usuario llena formulario
-  │ Ticket ID, Descripción, Billable, Flags, Fechas
-  ▼
-SubmitEntry()
-  ├─ Valida Ticket ID, Descripción y DateEntries
-  └─ Por cada DateEntry:
-        │
-        ├── Parsea fecha y hora inicio
-        ├── Llama ConnectWiseService.PostTimeEntryAsync()
-        │     └─ POST /time/entries con todos los datos
-        ├── Éxito  → AddLog(✓), incrementa successCount
-        └── Error  → AddLog(✗), incrementa errorCount
-
-Al finalizar todas las fechas
-  ├── Todo OK     → Snackbar verde + reset del formulario
-  ├── Parcial     → Snackbar amarillo
-  └── Todo error  → Snackbar rojo
-```
-
----
-
-## 🎨 Características de la UI
-
-| Característica | Descripción |
-|---|---|
-| **Modo Oscuro/Claro** | Toggle con botón 🌙/☀️ en el header |
-| **Multi-fecha** | Se pueden agregar N fechas al mismo ticket en un solo envío |
-| **Session Log** | Panel de historial de entradas registradas en la sesión actual |
-| **Snackbar** | Notificaciones temporales (3.5 s) de éxito / error / warning |
-| **Modal de Config** | Formulario con secciones básicas y avanzadas + toggle "mostrar/ocultar" contraseñas |
-| **Validación** | Validación de Ticket ID, descripción y rango de horas (0.25–8h) antes de enviar |
 
 ---
 
 ## 🛠️ Stack Tecnológico
 
-| Capa | Tecnología |
-|---|---|
-| Framework | .NET 9 / ASP.NET Core |
-| UI | Blazor (Render Mode: Interactive Server) |
-| Cliente WASM | Blazor WebAssembly (cwApp.Client) |
-| Estilos | CSS puro (scoped + global) |
-| HTTP Client | `IHttpClientFactory` + `HttpClient` |
-| Persistencia | Browser `localStorage` via JS Interop |
-| API Externa | ConnectWise Manage REST API v3 |
+| Capa | Tecnología | Propósito |
+| :--- | :--- | :--- |
+| **Framework** | .NET 9 | Base de la aplicación moderna |
+| **Frontend** | Blazor Server / WASM | UI Reactiva e interactiva de alto rendimiento |
+| **Estilos** | CSS Moderno | Diseño premium y responsivo |
+| **Persistencia** | Web Storage API | Almacenamiento seguro en el cliente (Privacidad) |
+| **CI/CD** | Azure DevOps | Automatización de construcción y despliegue continuo |
+| **Infraestructura** | Azure App Service | Hosting escalable en la nube (Linux) |
 
 ---
 
-## 📋 Notas adicionales
+## 🚀 Guía de Inicio Rápido
 
-- **Sin base de datos**: toda la configuración vive en el `localStorage` del navegador del usuario.
-- **Sin login propio**: la autenticación es delegada 100% a las API Keys de ConnectWise.
-- El modo WASM (`cwApp.Client`) está configurado como proyecto hijo pero la página principal `Home.razor` corre en modo **InteractiveServer** (SignalR), no en el cliente WASM.
-- Para producción, se recomienda configurar HTTPS con un certificado válido y ajustar las restricciones de CORS si fuera necesario.
+### Prerrequisitos
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- Visual Studio 2022 o VS Code con C# Dev Kit.
+
+### Ejecución Local
+1. Clone el repositorio.
+2. Navegue al directorio raíz.
+3. Ejecute el siguiente comando:
+   ```bash
+   dotnet run --project cwApp/cwApp.csproj
+   ```
+4. Abra `http://localhost:5248` en su navegador.
+
+### Configuración Inicial
+Al iniciar, deberá configurar sus credenciales de ConnectWise (Member ID, API Keys, etc.). Estos datos **se guardan únicamente en su equipo** y se utilizan para firmar las peticiones a la API oficial de ConnectWise.
+
+---
+
+## 🔄 Pipeline de CI/CD (DevOps)
+
+El proyecto cuenta con una integración profesional mediante **Azure Pipelines** (`azure-pipelines.yml`):
+
+1. **Etapa de Build**: 
+   - Restaura dependencias NuGet.
+   - Compila la solución en modo `Release`.
+   - Publica los artefactos de la aplicación Blazor optimizados.
+2. **Etapa de Deploy**:
+   - Se activa automáticamente al hacer push a la rama `main`.
+   - Despliega la aplicación directamente en **Azure App Service (Linux)**.
+   - Utiliza variables de entorno seguras gestionadas en Azure DevOps.
+
+---
+
+## 🔒 Privacidad y Seguridad
+
+- **Sin Servidor Intermedio**: La aplicación actúa como un puente directo entre su navegador y ConnectWise.
+- **Credenciales Efímeras**: Sus llaves privadas viven en su navegador. No se envían a analíticas ni se guardan en logs del servidor.
+- **Comunicación Segura**: Todas las llamadas a la API de ConnectWise utilizan cifrado TLS y autenticación Basic Auth conforme a los estándares de la industria.
+
+---
+
+## 📝 Notas de Versión
+- Soporte completo para .NET 9 Interactivity Service.
+- Implementación de modo interactivo dinámico (Auto).
+- Soporte para múltiples entradas de tiempo por ticket.
+- Integración nativa con Azure DevOps para despliegue continuo.
+
+---
+*Desarrollado para optimizar el flujo de trabajo en ConnectWise.*
