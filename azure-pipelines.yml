@@ -2,27 +2,22 @@ trigger:
   - main
 
 variables:
-  # Azure Resource Manager connection created during pipeline setup
-  azureServiceConnectionId: 'YOUR_SERVICE_CONNECTION_ID'
+  # ── Variables from Azure DevOps Variable Group ──
+  # AzureServiceConnectionId, WebAppName, EnvironmentName
+  # are defined in the 'EntriesConnectApp-Config' variable group
+  - group: 'EntriesConnectApp-Config'
 
-  # Azure Web App name (Windows or Linux App Service)
-  webAppName: 'YOUR_WEB_APP_NAME'
-
-  # Environment name (for approvals / deployment tracking)
-  environmentName: 'YOUR_WEB_APP_NAME'
-
-  # Solution / project paths
-  solution: 'cwApp.sln'
-  serverProject: 'cwApp/cwApp.csproj'
-
-  # Build configuration
-  buildConfiguration: 'Release'
-
-  # .NET SDK version (matches cwApp.csproj TargetFramework net9.0)
-  dotnetVersion: '9.0.x'
-
-  # Publish output folder
-  publishOutput: '$(Build.ArtifactStagingDirectory)/publish'
+  # ── Inline variables (build config, no secrets) ──
+  - name: solution
+    value: 'cwApp.sln'
+  - name: serverProject
+    value: 'cwApp/cwApp.csproj'
+  - name: buildConfiguration
+    value: 'Release'
+  - name: dotnetVersion
+    value: '9.0.x'
+  - name: publishOutput
+    value: '$(Build.ArtifactStagingDirectory)/publish'
 
 stages:
   # ─────────────────────────────────────────
@@ -83,16 +78,16 @@ stages:
         displayName: 'Deploy Blazor App'
         pool:
           vmImage: 'ubuntu-latest'
-        environment: '$(environmentName)'
+        environment: '$(EnvironmentName)'
         strategy:
           runOnce:
             deploy:
               steps:
                 - task: AzureWebApp@1
-                  displayName: 'Deploy to Azure Web App: $(webAppName)'
+                  displayName: 'Deploy to Azure Web App: $(WebAppName)'
                   inputs:
-                    azureSubscription: '$(azureServiceConnectionId)'
+                    azureSubscription: '$(AzureServiceConnectionId)'
                     appType: 'webAppLinux'
-                    appName: '$(webAppName)'
+                    appName: '$(WebAppName)'
                     package: '$(Pipeline.Workspace)/drop/**/*.zip'
                     runtimeStack: 'DOTNETCORE|9.0'
