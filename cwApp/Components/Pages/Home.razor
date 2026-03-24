@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @rendermode InteractiveServer
 @using cwApp.Models
 @using cwApp.Services
@@ -6,7 +6,7 @@
 @inject ConfigStorageService ConfigStorage
 @inject IJSRuntime JS
 
-<PageTitle>ConnectWise Time Entry</PageTitle>
+<PageTitle>ControlPanelPSA</PageTitle>
 
 <div class="cw-app @(isDark ? "dark" : "light")">
 
@@ -14,7 +14,7 @@
     <header class="appbar">
         <div class="appbar-left">
             <span class="appbar-icon">⏱</span>
-            <span class="appbar-title">ConnectWise Time Entry</span>
+            <span class="appbar-title">ControlPanelPSA</span>
         </div>
         <div class="appbar-actions">
             <button class="icon-btn" @onclick="OpenSettings" title="Configuración">⚙️</button>
@@ -28,128 +28,289 @@
     <main class="cw-main">
         <!-- FORM CARD -->
         <div class="card form-card">
-            <h2 class="section-title">Nueva Entrada</h2>
 
-            <!-- Ticket + Billable Row -->
-            <div class="form-row wrap-row">
-                <div class="field-group">
-                    <label class="field-label">Ticket ID</label>
-                    <input class="cw-input" type="number" placeholder="Ej: 12345"
-                           @bind="ticketId" @bind:event="oninput" autofocus />
-                </div>
-                <div class="field-group">
-                    <label class="field-label">Billable</label>
-                    <select class="cw-select" @bind="billableOption">
-                        <option value="Billable">Billable</option>
-                        <option value="DoNotBill">Do Not Bill</option>
-                        <option value="NoCharge">No Charge</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Description -->
-            <div class="field-group full-width">
-                <label class="field-label">Descripción</label>
-                <textarea class="cw-textarea" rows="3" placeholder="Descripción de la actividad"
-                          @bind="description" @bind:event="oninput"></textarea>
-            </div>
-
-            <!-- Checkboxes -->
-            <div class="checkbox-row">
-                <label class="cw-check">
-                    <input type="checkbox" @bind="addToDetail" />
-                    <span class="check-mark"></span>
-                    Discussion
-                </label>
-                <label class="cw-check">
-                    <input type="checkbox" @bind="addToInternal" />
-                    <span class="check-mark"></span>
-                    Internal
-                </label>
-                <label class="cw-check">
-                    <input type="checkbox" @bind="addToResolution" />
-                    <span class="check-mark"></span>
-                    Resolution
-                </label>
-                <div class="divider-v"></div>
-                <span class="notify-label">Notify:</span>
-                <label class="cw-check">
-                    <input type="checkbox" @bind="emailResource" />
-                    <span class="check-mark"></span>
-                    Resource
-                </label>
-                <label class="cw-check">
-                    <input type="checkbox" @bind="emailContact" />
-                    <span class="check-mark"></span>
-                    Contact
-                </label>
-                <label class="cw-check">
-                    <input type="checkbox" @bind="emailCc" />
-                    <span class="check-mark"></span>
-                    CC
-                </label>
-            </div>
-
-            <!-- Dates Section -->
-            <div class="dates-section">
-                <div class="dates-header">
-                    <span class="dates-icon">📅</span>
-                    <span class="dates-title">Fechas</span>
-                    <span class="dates-range">Rango: @minDateStr a @maxDateStr</span>
-                </div>
-
-                @foreach (var entry in dateEntries)
-                {
-                    <div class="date-row" @key="entry.Id">
-                        <div class="field-group">
-                            <label class="field-label">Fecha</label>
-                            <input class="cw-input date-input" type="date"
-                                   value="@entry.Date"
-                                   min="@minDateStr"
-                                   max="@maxDateStr"
-                                   @onchange="@(e => entry.Date = e.Value?.ToString() ?? entry.Date)" />
-                        </div>
-                        <div class="field-group">
-                            <label class="field-label">Hora Inicio</label>
-                            <input class="cw-input time-input" type="time"
-                                   value="@entry.StartTime"
-                                   @onchange="@(e => entry.StartTime = e.Value?.ToString() ?? entry.StartTime)" />
-                        </div>
-                        <div class="field-group">
-                            <label class="field-label">Horas</label>
-                            <input class="cw-input hours-input" type="number"
-                                   step="0.25" min="0.25" max="8"
-                                   value="@entry.Hours"
-                                   @onchange="@(e => { if(double.TryParse(e.Value?.ToString(), out var h)) entry.Hours = h; })" />
-                        </div>
-                        @if (dateEntries.Count > 1)
-                        {
-                            <button class="remove-btn" @onclick="() => RemoveDateEntry(entry)" title="Eliminar fecha">✖</button>
-                        }
-                    </div>
-                }
-
-                <button class="add-date-btn" @onclick="AddDateEntry">
-                    <span>➕</span> Agregar fecha
-                </button>
-            </div>
-
-            <!-- Submit Button -->
-            <div class="submit-row">
-                <button class="submit-btn @(isSubmitting ? "submitting" : "")"
-                        @onclick="SubmitEntry"
-                        disabled="@isSubmitting">
-                    @if (isSubmitting)
+            <!-- Title + Mode Toggle -->
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+                <h2 class="section-title" style="margin:0;">Nueva Entrada</h2>
+                <button class="icon-btn" style="padding:6px 14px; font-size:0.82rem; border-radius:8px; background:var(--accent); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;"
+                        @onclick="ToggleMultiTicketMode" type="button" title="Cambiar modo de entrada">
+                    @if (isMultiMode)
                     {
-                        <span class="spinner"></span>
-                        <span>Enviando...</span>
+                        <span>📋 Entrada Múltiple</span>
                     }
                     else
                     {
-                        <span>🚀 Registrar Entrada</span>
+                        <span>🎫 Entrada Sencilla</span>
                     }
                 </button>
             </div>
+
+            <!-- ===================== MODO SENCILLO (original) ===================== -->
+            @if (!isMultiMode)
+            {
+                <!-- Ticket + Billable Row -->
+                <div class="form-row wrap-row">
+                    <div class="field-group">
+                        <label class="field-label">Ticket ID</label>
+                        <input class="cw-input" type="number" placeholder="Ej: 12345"
+                               @bind="ticketId" @bind:event="oninput" autofocus />
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">Billable</label>
+                        <select class="cw-select" @bind="billableOption">
+                            <option value="Billable">Billable</option>
+                            <option value="DoNotBill">Do Not Bill</option>
+                            <option value="NoCharge">No Charge</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="field-group full-width">
+                    <label class="field-label">Descripción</label>
+                    <textarea class="cw-textarea" rows="3" placeholder="Descripción de la actividad"
+                              @bind="description" @bind:event="oninput"></textarea>
+                </div>
+
+                <!-- Checkboxes -->
+                <div class="checkbox-row">
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="addToDetail" />
+                        <span class="check-mark"></span>
+                        Discussion
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="addToInternal" />
+                        <span class="check-mark"></span>
+                        Internal
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="addToResolution" />
+                        <span class="check-mark"></span>
+                        Resolution
+                    </label>
+                    <div class="divider-v"></div>
+                    <span class="notify-label">Notify:</span>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="emailResource" />
+                        <span class="check-mark"></span>
+                        Resource
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="emailContact" />
+                        <span class="check-mark"></span>
+                        Contact
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="emailCc" />
+                        <span class="check-mark"></span>
+                        CC
+                    </label>
+                </div>
+
+                <!-- Dates Section -->
+                <div class="dates-section">
+                    <div class="dates-header">
+                        <span class="dates-icon">📅</span>
+                        <span class="dates-title">Fechas</span>
+                        <span class="dates-range">Rango: @minDateStr a @maxDateStr</span>
+                    </div>
+
+                    @foreach (var entry in dateEntries)
+                    {
+                        <div class="date-row" @key="entry.Id">
+                            <div class="field-group">
+                                <label class="field-label">Fecha</label>
+                                <input class="cw-input date-input" type="date"
+                                       value="@entry.Date"
+                                       min="@minDateStr"
+                                       max="@maxDateStr"
+                                       @onchange="@(e => entry.Date = e.Value?.ToString() ?? entry.Date)" />
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Hora Inicio</label>
+                                <input class="cw-input time-input" type="time"
+                                       value="@entry.StartTime"
+                                       @onchange="@(e => entry.StartTime = e.Value?.ToString() ?? entry.StartTime)" />
+                            </div>
+                            <div class="field-group">
+                                <label class="field-label">Horas</label>
+                                <input class="cw-input hours-input" type="number"
+                                       step="0.25" min="0.25" max="8"
+                                       value="@entry.Hours"
+                                       @onchange="@(e => { if(double.TryParse(e.Value?.ToString(), out var h)) entry.Hours = h; })" />
+                            </div>
+                            @if (dateEntries.Count > 1)
+                            {
+                                <button class="remove-btn" @onclick="() => RemoveDateEntry(entry)" title="Eliminar fecha">✖</button>
+                            }
+                        </div>
+                    }
+
+                    <button class="add-date-btn" @onclick="AddDateEntry">
+                        <span>➕</span> Agregar fecha
+                    </button>
+                </div>
+
+                <!-- Submit -->
+                <div class="submit-row">
+                    <button class="submit-btn @(isSubmitting ? "submitting" : "")"
+                            @onclick="SubmitEntry"
+                            disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner"></span>
+                            <span>Enviando...</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Registrar Entrada</span>
+                        }
+                    </button>
+                </div>
+            }
+
+            <!-- ===================== MODO MÚLTIPLE ===================== -->
+            @if (isMultiMode)
+            {
+                <!-- Shared Description -->
+                <div class="field-group full-width" style="margin-top:8px;">
+                    <label class="field-label">Descripción (compartida)</label>
+                    <textarea class="cw-textarea" rows="2" placeholder="Descripción de la actividad (aplica a todos los tickets)"
+                              @bind="description" @bind:event="oninput"></textarea>
+                </div>
+
+                <!-- Shared Checkboxes -->
+                <div class="checkbox-row">
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="addToDetail" />
+                        <span class="check-mark"></span>
+                        Discussion
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="addToInternal" />
+                        <span class="check-mark"></span>
+                        Internal
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="addToResolution" />
+                        <span class="check-mark"></span>
+                        Resolution
+                    </label>
+                    <div class="divider-v"></div>
+                    <span class="notify-label">Notify:</span>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="emailResource" />
+                        <span class="check-mark"></span>
+                        Resource
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="emailContact" />
+                        <span class="check-mark"></span>
+                        Contact
+                    </label>
+                    <label class="cw-check">
+                        <input type="checkbox" @bind="emailCc" />
+                        <span class="check-mark"></span>
+                        CC
+                    </label>
+                </div>
+
+                <!-- Multi-ticket rows -->
+                <div style="margin-top:12px; display:flex; flex-direction:column; gap:12px;">
+                    @foreach (var mt in multiTickets)
+                    {
+                        <div class="dates-section" @key="mt.Id" style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+
+                            <!-- Ticket header row: ID + Billable + remove -->
+                            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:8px;">
+                                <div class="field-group" style="min-width:140px; flex:1;">
+                                    <label class="field-label">Ticket ID</label>
+                                    <input class="cw-input" type="number" placeholder="Ej: 12345"
+                                           @bind="mt.TicketId" @bind:event="oninput" />
+                                </div>
+                                <div class="field-group" style="min-width:130px;">
+                                    <label class="field-label">Billable</label>
+                                    <select class="cw-select" @bind="mt.BillableOption">
+                                        <option value="Billable">Billable</option>
+                                        <option value="DoNotBill">Do Not Bill</option>
+                                        <option value="NoCharge">No Charge</option>
+                                    </select>
+                                </div>
+                                @if (multiTickets.Count > 1)
+                                {
+                                    <button class="remove-btn" style="margin-bottom:2px;"
+                                            @onclick="() => RemoveMultiTicket(mt)" title="Eliminar ticket">✖</button>
+                                }
+                            </div>
+
+                            <!-- Date entries for this ticket -->
+                            <div class="dates-header" style="margin-bottom:6px;">
+                                <span class="dates-icon">📅</span>
+                                <span class="dates-title" style="font-size:0.82rem;">Fechas — Rango: @minDateStr a @maxDateStr</span>
+                            </div>
+
+                            @foreach (var de in mt.DateEntries)
+                            {
+                                <div class="date-row" @key="de.Id">
+                                    <div class="field-group">
+                                        <label class="field-label">Fecha</label>
+                                        <input class="cw-input date-input" type="date"
+                                               value="@de.Date"
+                                               min="@minDateStr"
+                                               max="@maxDateStr"
+                                               @onchange="@(e => de.Date = e.Value?.ToString() ?? de.Date)" />
+                                    </div>
+                                    <div class="field-group">
+                                        <label class="field-label">Hora Inicio</label>
+                                        <input class="cw-input time-input" type="time"
+                                               value="@de.StartTime"
+                                               @onchange="@(e => de.StartTime = e.Value?.ToString() ?? de.StartTime)" />
+                                    </div>
+                                    <div class="field-group">
+                                        <label class="field-label">Horas</label>
+                                        <input class="cw-input hours-input" type="number"
+                                               step="0.25" min="0.25" max="8"
+                                               value="@de.Hours"
+                                               @onchange="@(e => { if(double.TryParse(e.Value?.ToString(), out var h)) de.Hours = h; })" />
+                                    </div>
+                                    @if (mt.DateEntries.Count > 1)
+                                    {
+                                        <button class="remove-btn" @onclick="() => mt.DateEntries.Remove(de)" title="Eliminar fecha">✖</button>
+                                    }
+                                </div>
+                            }
+
+                            <button class="add-date-btn" @onclick="() => AddDateToMultiTicket(mt)">
+                                <span>➕</span> Agregar fecha
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <!-- Add ticket button -->
+                <button class="add-date-btn" style="margin-top:12px;" @onclick="AddMultiTicket">
+                    <span>➕</span> Agregar ticket
+                </button>
+
+                <!-- Submit -->
+                <div class="submit-row" style="margin-top:14px;">
+                    <button class="submit-btn @(isSubmitting ? "submitting" : "")"
+                            @onclick="SubmitMultiEntry"
+                            disabled="@isSubmitting">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner"></span>
+                            <span>Enviando...</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Registrar Todos</span>
+                        }
+                    </button>
+                </div>
+            }
+
         </div>
 
         <!-- SESSION LOG -->
@@ -249,7 +410,7 @@
 }
 
 @code {
-    // ---- State ----
+    // ---- State (modo sencillo) ----
     private ConnectWiseConfig config = new();
     private ConnectWiseConfig editConfig = new();
     private List<DateEntry> dateEntries = new();
@@ -265,6 +426,24 @@
     private bool emailContact = false;
     private bool emailCc = false;
 
+    // ---- Estado modo múltiple ----
+    private bool isMultiMode = false;
+
+    /// <summary>
+    /// Representa un ticket individual dentro del modo de entrada múltiple.
+    /// Cada ticket tiene su propio Billable y lista de entradas de fecha/hora/horas.
+    /// </summary>
+    private class MultiTicketEntry
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+        public string TicketId { get; set; } = "";
+        public string BillableOption { get; set; } = "DoNotBill";
+        public List<DateEntry> DateEntries { get; set; } = new();
+    }
+
+    private List<MultiTicketEntry> multiTickets = new();
+
+    // ---- UI state ----
     private bool isSubmitting = false;
     private bool isDark = false;
     private bool settingsOpen = false;
@@ -284,7 +463,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Date range
         var today = DateTime.Today;
         maxDateStr = today.ToString("yyyy-MM-dd");
         var firstPrevMonth = today.Month == 1
@@ -292,18 +470,14 @@
             : new DateTime(today.Year, today.Month - 1, 1);
         minDateStr = firstPrevMonth.ToString("yyyy-MM-dd");
 
-        // Add first entry
         AddDateEntry();
 
-        // Load config
         config = await ConfigStorage.LoadAsync();
-
         if (!config.IsComplete())
-        {
             OpenSettings();
-        }
     }
 
+    // ---- Modo sencillo: fechas ----
     private void AddDateEntry()
     {
         dateEntries.Add(new DateEntry
@@ -314,16 +488,205 @@
         });
     }
 
-    private void RemoveDateEntry(DateEntry entry)
+    private void RemoveDateEntry(DateEntry entry) => dateEntries.Remove(entry);
+
+    // ---- Modo múltiple: tickets y fechas ----
+    /// <summary>Alterna entre modo sencillo y modo de entrada múltiple.</summary>
+    private void ToggleMultiTicketMode()
     {
-        dateEntries.Remove(entry);
+        isMultiMode = !isMultiMode;
+        if (isMultiMode && multiTickets.Count == 0)
+            AddMultiTicket();
+    }
+
+    private void AddMultiTicket()
+    {
+        var mt = new MultiTicketEntry();
+        mt.DateEntries.Add(new DateEntry
+        {
+            Date = DateTime.Today.ToString("yyyy-MM-dd"),
+            StartTime = "08:00",
+            Hours = 1.0
+        });
+        multiTickets.Add(mt);
+    }
+
+    private void RemoveMultiTicket(MultiTicketEntry mt) => multiTickets.Remove(mt);
+
+    private void AddDateToMultiTicket(MultiTicketEntry mt)
+    {
+        mt.DateEntries.Add(new DateEntry
+        {
+            Date = DateTime.Today.ToString("yyyy-MM-dd"),
+            StartTime = "08:00",
+            Hours = 1.0
+        });
+    }
+
+    // ---- Modo sencillo: submit ----
+    private async Task SubmitEntry()
+    {
+        if (string.IsNullOrWhiteSpace(ticketId))
+        {
+            await ShowSnackbar("⚠ Por favor ingresa un Ticket ID", "error");
+            return;
+        }
+        if (!dateEntries.Any())
+        {
+            await ShowSnackbar("⚠ Debe haber al menos una fecha", "error");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            await ShowSnackbar("⚠ Por favor ingresa una descripción", "error");
+            return;
+        }
+
+        isSubmitting = true;
+        int successCount = 0, errorCount = 0;
+
+        foreach (var dateEntry in dateEntries.ToList())
+        {
+            var (ok, startHour) = ParseDateEntry(dateEntry, out var selectedDate);
+            if (!ok) { errorCount++; continue; }
+
+            var result = await CwService.PostTimeEntryAsync(
+                config, ticketId, dateEntry.Hours, description, selectedDate, startHour,
+                billableOption, addToDetail, addToInternal, addToResolution,
+                emailResource, emailContact, emailCc);
+
+            if (result.Success)
+            {
+                successCount++;
+                AddLog($"✓ {dateEntry.Date}: Ticket #{ticketId} ({dateEntry.Hours}h) - {result.Message}");
+            }
+            else
+            {
+                errorCount++;
+                AddLog($"✗ {dateEntry.Date}: Ticket #{ticketId} - {result.Message}", isError: true);
+            }
+        }
+
+        isSubmitting = false;
+        await HandleSubmitResult(successCount, errorCount);
+
+        if (successCount > 0 && errorCount == 0)
+        {
+            ticketId = "";
+            description = "";
+            dateEntries.Clear();
+            AddDateEntry();
+        }
+    }
+
+    // ---- Modo múltiple: submit ----
+    private async Task SubmitMultiEntry()
+    {
+        if (!multiTickets.Any(mt => !string.IsNullOrWhiteSpace(mt.TicketId)))
+        {
+            await ShowSnackbar("⚠ Ingresa al menos un Ticket ID", "error");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            await ShowSnackbar("⚠ Por favor ingresa una descripción", "error");
+            return;
+        }
+
+        isSubmitting = true;
+        int successCount = 0, errorCount = 0;
+
+        foreach (var mt in multiTickets.ToList())
+        {
+            if (string.IsNullOrWhiteSpace(mt.TicketId)) continue;
+
+            foreach (var de in mt.DateEntries.ToList())
+            {
+                var (ok, startHour) = ParseDateEntry(de, out var selectedDate);
+                if (!ok) { errorCount++; continue; }
+
+                var result = await CwService.PostTimeEntryAsync(
+                    config, mt.TicketId, de.Hours, description, selectedDate, startHour,
+                    mt.BillableOption, addToDetail, addToInternal, addToResolution,
+                    emailResource, emailContact, emailCc);
+
+                if (result.Success)
+                {
+                    successCount++;
+                    AddLog($"✓ {de.Date}: Ticket #{mt.TicketId} ({de.Hours}h) - {result.Message}");
+                }
+                else
+                {
+                    errorCount++;
+                    AddLog($"✗ {de.Date}: Ticket #{mt.TicketId} - {result.Message}", isError: true);
+                }
+            }
+        }
+
+        isSubmitting = false;
+        await HandleSubmitResult(successCount, errorCount);
+
+        if (successCount > 0 && errorCount == 0)
+        {
+            description = "";
+            multiTickets.Clear();
+            AddMultiTicket();
+        }
+    }
+
+    // ---- Helpers ----
+
+    /// <summary>
+    /// Valida y convierte una entrada de fecha/hora en valores usables para la API.
+    /// Devuelve (válido, horaInicio). Registra en log si hay error.
+    /// </summary>
+    private (bool valid, double startHour) ParseDateEntry(DateEntry entry, out DateTime selectedDate)
+    {
+        selectedDate = default;
+        if (!DateTime.TryParse(entry.Date, out selectedDate))
+        {
+            AddLog($"Fecha inválida: {entry.Date}", isError: true);
+            return (false, 0);
+        }
+        if (entry.Hours <= 0 || entry.Hours > 8)
+        {
+            AddLog($"Horas inválidas para {entry.Date}: {entry.Hours}", isError: true);
+            return (false, 0);
+        }
+        double startHour = 8.0;
+        if (!string.IsNullOrWhiteSpace(entry.StartTime))
+        {
+            var parts = entry.StartTime.Split(':');
+            if (parts.Length >= 2 && int.TryParse(parts[0], out var h) && int.TryParse(parts[1], out var m))
+                startHour = h + (m / 60.0);
+        }
+        return (true, startHour);
+    }
+
+    private async Task HandleSubmitResult(int successCount, int errorCount)
+    {
+        if (successCount > 0 && errorCount == 0)
+            await ShowSnackbar($"✓ {successCount} entrada(s) registrada(s) exitosamente", "success");
+        else if (successCount > 0)
+            await ShowSnackbar($"Parcial: {successCount} exitosas, {errorCount} errores", "warning");
+        else
+            await ShowSnackbar($"✗ Error: {errorCount} entrada(s) fallaron", "error");
+    }
+
+    private void AddLog(string message, bool isError = false)
+    {
+        sessionLog.Insert(0, new SessionLogEntry
+        {
+            Message = message,
+            IsError = isError,
+            Timestamp = DateTime.Now
+        });
     }
 
     private void ToggleTheme() => isDark = !isDark;
 
     private void OpenSettings()
     {
-        // Clone config for editing
         editConfig = new ConnectWiseConfig
         {
             CompanyId = config.CompanyId,
@@ -350,100 +713,6 @@
         await ConfigStorage.SaveAsync(config);
         settingsOpen = false;
         await ShowSnackbar("✓ Configuración guardada", "success");
-    }
-
-    private async Task SubmitEntry()
-    {
-        if (string.IsNullOrWhiteSpace(ticketId))
-        {
-            await ShowSnackbar("⚠ Por favor ingresa un Ticket ID", "error");
-            return;
-        }
-        if (!dateEntries.Any())
-        {
-            await ShowSnackbar("⚠ Debe haber al menos una fecha", "error");
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(description))
-        {
-            await ShowSnackbar("⚠ Por favor ingresa una descripción", "error");
-            return;
-        }
-
-        isSubmitting = true;
-        int successCount = 0, errorCount = 0;
-
-        foreach (var dateEntry in dateEntries.ToList())
-        {
-            if (!DateTime.TryParse(dateEntry.Date, out var selectedDate))
-            {
-                AddLog($"Fecha inválida: {dateEntry.Date}", isError: true);
-                errorCount++;
-                continue;
-            }
-
-            if (dateEntry.Hours <= 0 || dateEntry.Hours > 8)
-            {
-                AddLog($"Horas inválidas para {dateEntry.Date}: {dateEntry.Hours}", isError: true);
-                errorCount++;
-                continue;
-            }
-
-            // Parse start time HH:MM → decimal hour
-            double startHour = 8.0;
-            if (!string.IsNullOrWhiteSpace(dateEntry.StartTime))
-            {
-                var parts = dateEntry.StartTime.Split(':');
-                if (parts.Length >= 2 && int.TryParse(parts[0], out var h) && int.TryParse(parts[1], out var m))
-                    startHour = h + (m / 60.0);
-            }
-
-            var result = await CwService.PostTimeEntryAsync(
-                config, ticketId, dateEntry.Hours, description, selectedDate, startHour,
-                billableOption, addToDetail, addToInternal, addToResolution,
-                emailResource, emailContact, emailCc);
-
-            if (result.Success)
-            {
-                successCount++;
-                AddLog($"✓ {dateEntry.Date}: Ticket #{ticketId} ({dateEntry.Hours}h) - {result.Message}");
-            }
-            else
-            {
-                errorCount++;
-                AddLog($"✗ {dateEntry.Date}: Ticket #{ticketId} - {result.Message}", isError: true);
-            }
-        }
-
-        isSubmitting = false;
-
-        if (successCount > 0 && errorCount == 0)
-        {
-            await ShowSnackbar($"✓ {successCount} entrada(s) registrada(s) exitosamente", "success");
-            // Reset form
-            ticketId = "";
-            description = "";
-            dateEntries.Clear();
-            AddDateEntry();
-        }
-        else if (successCount > 0)
-        {
-            await ShowSnackbar($"Parcial: {successCount} exitosas, {errorCount} errores", "warning");
-        }
-        else
-        {
-            await ShowSnackbar($"✗ Error: {errorCount} entrada(s) fallaron", "error");
-        }
-    }
-
-    private void AddLog(string message, bool isError = false)
-    {
-        sessionLog.Insert(0, new SessionLogEntry
-        {
-            Message = message,
-            IsError = isError,
-            Timestamp = DateTime.Now
-        });
     }
 
     private async Task ShowSnackbar(string message, string type = "success")

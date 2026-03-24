@@ -1,10 +1,10 @@
-# ⏱ ConnectWise Time Entry App
+# 🗂️ ControlPanelPSA
 
 [![.NET 9](https://img.shields.io/badge/.NET-9.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet/9.0)
 [![Blazor](https://img.shields.io/badge/Framework-Blazor-purple.svg)](https://dotnet.microsoft.com/apps/aspnet/web-apps/blazor)
 [![Build & Deploy](https://img.shields.io/badge/CI%2FCD-Azure%20Pipelines-green.svg)](azure-pipelines.yml)
 
-Una aplicación web moderna y ligera construida con **Blazor (.NET 9)** diseñada para optimizar el registro de entradas de tiempo en **ConnectWise Manage**. Permite a los consultores registrar múltiples fechas y entradas para un mismo ticket de forma masiva, directamente desde el navegador.
+**ControlPanelPSA** es una aplicación web moderna construida con **Blazor (.NET 9)** diseñada para optimizar el registro de entradas de tiempo en **ConnectWise Manage**. Permite a los consultores documentar tickets en modo sencillo o múltiple (varios tickets con fechas y horas independientes), directamente desde el navegador, con el mínimo de clics posible.
 
 ---
 
@@ -126,4 +126,4 @@ El proyecto cuenta con una integración profesional mediante **Azure Pipelines**
 - Integración nativa con Azure DevOps para despliegue continuo.
 
 ---
-*Desarrollado para optimizar el flujo de trabajo en ConnectWise.*
+*ControlPanelPSA — Desarrollado para optimizar el flujo de trabajo en ConnectWise.*

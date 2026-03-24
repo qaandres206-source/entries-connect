@@ -27,7 +27,7 @@ stages:
   # BUILD STAGE
   # ─────────────────────────────────────────
   - stage: Build
-    displayName: 'Build .NET 9 Blazor App'
+    displayName: 'Build ControlPanelPSA (.NET 9)'
     jobs:
       - job: BuildJob
         displayName: 'Restore, Build & Publish'
@@ -54,7 +54,7 @@ stages:
               arguments: '--configuration $(buildConfiguration) --no-restore'
 
           - task: DotNetCoreCLI@2
-            displayName: 'Publish server project'
+            displayName: 'Publish ControlPanelPSA server project'
             inputs:
               command: 'publish'
               publishWebProjects: false
@@ -73,12 +73,12 @@ stages:
   # DEPLOY STAGE
   # ─────────────────────────────────────────
   - stage: Deploy
-    displayName: 'Deploy to Azure App Service'
+    displayName: 'Deploy ControlPanelPSA to Azure App Service'
     dependsOn: Build
     condition: succeeded()
     jobs:
       - deployment: DeploymentJob
-        displayName: 'Deploy Blazor App'
+        displayName: 'Deploy ControlPanelPSA'
         pool:
           vmImage: 'ubuntu-latest'
         environment: '$(ENVIRONMENT_NAME)'
