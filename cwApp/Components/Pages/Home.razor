@@ -4,6 +4,7 @@
 @using cwApp.Services
 @inject ConnectWiseService CwService
 @inject ConfigStorageService ConfigStorage
+@inject TicketContextService Bridge
 @inject IJSRuntime JS
 
 <PageTitle>ControlPanelPSA</PageTitle>
@@ -26,6 +27,164 @@
 
     <!-- MAIN CONTENT -->
     <main class="cw-main">
+
+        <!-- MIS TICKETS -->
+        <div class="card tickets-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h2 class="section-title" style="margin:0; padding:0; border:none;">🎫 Mis Tickets</h2>
+                @if (config.IsComplete() && ticketsLoaded && ticketsError is null)
+                {
+                    <button class="icon-btn" style="background:var(--primary); width:auto; padding:6px 14px; font-size:0.82rem; gap:6px; white-space:nowrap;"
+                            @onclick="LoadMyTickets" disabled="@isLoadingTickets" title="Recargar tickets">
+                        @if (isLoadingTickets) { <span class="spinner"></span> } else { <span>🔄 Recargar</span> }
+                    </button>
+                }
+            </div>
+
+            @if (!config.IsComplete())
+            {
+                <div class="tickets-empty">⚙️ Ingresa tu Member ID y llaves en Configuración para ver tus tickets asignados.</div>
+            }
+            else if (ticketsError is not null)
+            {
+                <div class="tickets-error">@ticketsError</div>
+                <button class="add-date-btn" style="margin-top:10px;" @onclick="LoadMyTickets" disabled="@isLoadingTickets">🔄 Reintentar</button>
+            }
+            else if (!ticketsLoaded)
+            {
+                <button class="add-date-btn" @onclick="LoadMyTickets" disabled="@isLoadingTickets">
+                    @if (isLoadingTickets)
+                    {
+                        <span class="spinner" style="border-color:rgba(99,102,241,0.35); border-top-color:var(--primary);"></span>
+                        <span>Cargando...</span>
+                    }
+                    else
+                    {
+                        <span>📥 Cargar mis tickets</span>
+                    }
+                </button>
+            }
+            else if (!myTickets.Any())
+            {
+                <div class="tickets-empty">No tienes tickets abiertos asignados (filtro: owner = @config.MemberId).</div>
+            }
+            else
+            {
+                <div class="tickets-list">
+                    @foreach (var t in myTickets)
+                    {
+                        <div class="ticket-item @(selectedTicketId == t.Id ? "selected" : "")" @key="t.Id" @onclick="() => SelectTicket(t)">
+                            <div class="ticket-item-head">
+                                <span class="ticket-id">#@t.Id</span>
+                                <span class="ticket-status">@(t.Status?.Name ?? "—")</span>
+                            </div>
+                            <div class="ticket-summary">@t.Summary</div>
+                            <div class="ticket-meta">@(t.Company?.Name ?? t.Company?.Identifier)</div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (selectedTicketId is not null)
+            {
+                <div class="ticket-detail">
+                    <div class="dates-header" style="margin-bottom:10px;">
+                        <span class="dates-icon">💬</span>
+                        <span class="dates-title">Hilo del ticket #@selectedTicketId</span>
+                    </div>
+                    @if (isLoadingNotes)
+                    {
+                        <div class="tickets-empty">
+                            <span class="spinner" style="border-color:rgba(99,102,241,0.35); border-top-color:var(--primary);"></span>
+                            Cargando hilo...
+                        </div>
+                    }
+                    else if (notesError is not null)
+                    {
+                        <div class="tickets-error">@notesError</div>
+                    }
+                    else if (!selectedNotes.Any())
+                    {
+                        <div class="tickets-empty">Este ticket no tiene notas.</div>
+                    }
+                    else
+                    {
+                        <div class="notes-thread">
+                            @foreach (var n in selectedNotes)
+                            {
+                                <div class="note-item" @key="n.Id">
+                                    <div class="note-head">
+                                        <span class="note-badge note-@NoteTypeClass(n)">@NoteTypeLabel(n)</span>
+                                        <span class="note-author">@(n.Member?.Name ?? n.CreatedBy ?? "—")</span>
+                                        <span class="note-date">@(n.DateCreated?.ToString("yyyy-MM-dd HH:mm"))</span>
+                                    </div>
+                                    <div class="note-text">@n.Text</div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (Bridge.IsEnabled)
+                    {
+                        <div class="dates-header" style="margin:18px 0 10px;">
+                            <span class="dates-icon">🔗</span>
+                            <span class="dates-title">Relacionado en ITGlue</span>
+                        </div>
+                        @if (isLoadingContext)
+                        {
+                            <div class="tickets-empty">
+                                <span class="spinner" style="border-color:rgba(99,102,241,0.35); border-top-color:var(--primary);"></span>
+                                Buscando en ITGlue...
+                            </div>
+                        }
+                        else if (contextError is not null)
+                        {
+                            <div class="tickets-error">@contextError</div>
+                        }
+                        else if (ticketContext?.Organization is null)
+                        {
+                            <div class="tickets-empty">@(ticketContext?.Message ?? "Sin coincidencias en ITGlue.")</div>
+                        }
+                        else
+                        {
+                            <div class="ticket-meta" style="margin-bottom:8px;">
+                                Organización: <strong>@ticketContext.Organization.Name</strong>
+                            </div>
+                            @if (!ticketContext.RelatedItems.Any())
+                            {
+                                <div class="tickets-empty">Sin configuraciones relacionadas para este ticket.</div>
+                            }
+                            else
+                            {
+                                <div class="notes-thread">
+                                    @foreach (var it in ticketContext.RelatedItems)
+                                    {
+                                        <div class="itglue-item" @key="it.Id">
+                                            <div class="itglue-head">
+                                                <span class="note-badge note-default">@it.ResourceType</span>
+                                                @if (it.WebLink is not null)
+                                                {
+                                                    <a class="itglue-link" href="@it.WebLink" target="_blank" rel="noopener">@it.Name</a>
+                                                }
+                                                else
+                                                {
+                                                    <span class="itglue-name">@it.Name</span>
+                                                }
+                                            </div>
+                                            @if (it.Subtitle is not null)
+                                            {
+                                                <div class="ticket-meta">@it.Subtitle</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+            }
+        </div>
+
         <!-- FORM CARD -->
         <div class="card form-card">
 
@@ -461,6 +620,22 @@
     private string minDateStr = "";
     private string maxDateStr = "";
 
+    // ---- Estado: Mis Tickets (Fase 1 + 2) ----
+    private List<TicketSummary> myTickets = new();
+    private bool isLoadingTickets = false;
+    private bool ticketsLoaded = false;
+    private string? ticketsError = null;
+
+    private int? selectedTicketId = null;
+    private List<TicketNote> selectedNotes = new();
+    private bool isLoadingNotes = false;
+    private string? notesError = null;
+
+    // ---- Estado: contexto ITGlue del ticket (Fase 3) ----
+    private TicketContext? ticketContext = null;
+    private bool isLoadingContext = false;
+    private string? contextError = null;
+
     protected override async Task OnInitializedAsync()
     {
         var today = DateTime.Today;
@@ -476,6 +651,93 @@
         if (!config.IsComplete())
             OpenSettings();
     }
+
+    // ---- Mis Tickets (Fase 1 + 2) ----
+
+    /// <summary>Carga los tickets abiertos del usuario actual. Solo corre con config completa.</summary>
+    private async Task LoadMyTickets()
+    {
+        if (!config.IsComplete()) return;
+
+        isLoadingTickets = true;
+        ticketsError = null;
+        try
+        {
+            myTickets = await CwService.GetMyTicketsAsync(config);
+            ticketsLoaded = true;
+            // Si el ticket seleccionado ya no está en la lista, colapsa el detalle.
+            if (selectedTicketId is not null && !myTickets.Any(t => t.Id == selectedTicketId))
+                selectedTicketId = null;
+        }
+        catch (Exception ex)
+        {
+            ticketsError = $"No se pudieron cargar los tickets: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingTickets = false;
+        }
+    }
+
+    /// <summary>Selecciona/colapsa un ticket, precarga su id en el formulario y trae su hilo de notas.</summary>
+    private async Task SelectTicket(TicketSummary t)
+    {
+        if (selectedTicketId == t.Id)
+        {
+            selectedTicketId = null;
+            ticketContext = null;
+            return;
+        }
+
+        selectedTicketId = t.Id;
+        ticketId = t.Id.ToString();   // precarga el campo de modo sencillo
+        selectedNotes = new();
+        notesError = null;
+        ticketContext = null;
+        contextError = null;
+
+        isLoadingNotes = true;
+        try
+        {
+            selectedNotes = await CwService.GetTicketNotesAsync(config, t.Id.ToString());
+        }
+        catch (Exception ex)
+        {
+            notesError = $"No se pudieron cargar las notas: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingNotes = false;
+        }
+
+        // Fase 3: contexto relacionado de ITGlue (solo si la key está configurada server-side).
+        if (Bridge.IsEnabled)
+        {
+            isLoadingContext = true;
+            try
+            {
+                ticketContext = await Bridge.GetContextAsync(t, selectedNotes);
+            }
+            catch (Exception ex)
+            {
+                contextError = $"ITGlue: {ex.Message}";
+            }
+            finally
+            {
+                isLoadingContext = false;
+            }
+        }
+    }
+
+    private static string NoteTypeLabel(TicketNote n) =>
+        n.ResolutionFlag ? "Resolution" :
+        n.InternalAnalysisFlag ? "Internal" :
+        n.DetailDescriptionFlag ? "Discussion" : "Nota";
+
+    private static string NoteTypeClass(TicketNote n) =>
+        n.ResolutionFlag ? "resolution" :
+        n.InternalAnalysisFlag ? "internal" :
+        n.DetailDescriptionFlag ? "discussion" : "default";
 
     // ---- Modo sencillo: fechas ----
     private void AddDateEntry()

@@ -1,4 +1,5 @@
 using cwApp.Components;
+using cwApp.Models;
 using cwApp.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,17 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ConnectWiseService>();
 builder.Services.AddScoped<ConfigStorageService>();
+
+// ITGlue bridge (Fase 3). La API key se inyecta server-side vía variables de entorno
+// (ITGLUE_API_KEY, ITGLUE_BASE_URL, ITGLUE_WEB_URL) — nunca en el navegador.
+builder.Services.AddSingleton(new ItGlueOptions
+{
+    ApiKey = builder.Configuration["ITGLUE_API_KEY"] ?? "",
+    BaseUrl = builder.Configuration["ITGLUE_BASE_URL"] ?? "https://api.itglue.com",
+    WebUrl = builder.Configuration["ITGLUE_WEB_URL"]
+});
+builder.Services.AddScoped<ItGlueService>();
+builder.Services.AddScoped<TicketContextService>();
 
 var app = builder.Build();
 
