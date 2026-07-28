@@ -1,36 +1,30 @@
-trigger:
-  - main
+# ─────────────────────────────────────────────────────────────────────────
+#  ControlPanelPSA — CI opcional (Azure DevOps)
+#
+#  IMPORTANTE: el DESPLIEGUE de esta aplicación se realiza en **Render**
+#  (runtime Docker, ver ./Dockerfile y ./render.yaml). Azure DevOps se usa
+#  únicamente como repositorio.
+#
+#  Por eso el trigger está en 'none': ningún push ejecuta este pipeline.
+#  Queda disponible solo para ejecución MANUAL, como verificación de build.
+# ─────────────────────────────────────────────────────────────────────────
+trigger: none
+pr: none
 
 variables:
-  # ── Variables from Azure DevOps Variable Group ──
-  # You need to define the following variables in the 'azure-static-web-apps-polite-mud-0442eb20f-variable-group' variable group:
-  # - AZURE_SERVICE_CONNECTION_ID (your Azure service connection name)
-  # - WEB_APP_NAME (the name of your Azure App Service)
-  - group: 'azure-static-web-apps-polite-mud-0442eb20f-variable-group'
-
-  # ── Inline variables (build config, no secrets) ──
-  - name: ENVIRONMENT_NAME
-    value: 'Production' # You can change this to 'Development' or another name if preferred
   - name: solution
     value: 'cwApp.sln'
-  - name: serverProject
-    value: 'cwApp/cwApp.csproj'
   - name: buildConfiguration
     value: 'Release'
   - name: dotnetVersion
     value: '9.0.x'
-  - name: publishOutput
-    value: '$(Build.ArtifactStagingDirectory)/publish'
 
 stages:
-  # ─────────────────────────────────────────
-  # BUILD STAGE
-  # ─────────────────────────────────────────
   - stage: Build
     displayName: 'Build ControlPanelPSA (.NET 9)'
     jobs:
       - job: BuildJob
-        displayName: 'Restore, Build & Publish'
+        displayName: 'Restore & Build'
         pool:
           vmImage: 'ubuntu-latest'
         steps:
@@ -52,45 +46,3 @@ stages:
               command: 'build'
               projects: '$(solution)'
               arguments: '--configuration $(buildConfiguration) --no-restore'
-
-          - task: DotNetCoreCLI@2
-            displayName: 'Publish ControlPanelPSA server project'
-            inputs:
-              command: 'publish'
-              publishWebProjects: false
-              projects: '$(serverProject)'
-              arguments: '--configuration $(buildConfiguration) --no-build --output $(publishOutput)'
-              zipAfterPublish: true
-
-          - task: PublishBuildArtifacts@1
-            displayName: 'Upload artifact: drop'
-            inputs:
-              PathtoPublish: '$(publishOutput)'
-              ArtifactName: 'drop'
-              publishLocation: 'Container'
-
-  # ─────────────────────────────────────────
-  # DEPLOY STAGE
-  # ─────────────────────────────────────────
-  - stage: Deploy
-    displayName: 'Deploy ControlPanelPSA to Azure App Service'
-    dependsOn: Build
-    condition: succeeded()
-    jobs:
-      - deployment: DeploymentJob
-        displayName: 'Deploy ControlPanelPSA'
-        pool:
-          vmImage: 'ubuntu-latest'
-        environment: '$(ENVIRONMENT_NAME)'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - task: AzureWebApp@1
-                  displayName: 'Deploy to Azure Web App: $(WEB_APP_NAME)'
-                  inputs:
-                    azureSubscription: 'AzureServiceConnection'
-                    appType: 'webAppLinux'
-                    appName: 'ControlPanelPSA'
-                    package: '$(Pipeline.Workspace)/drop/**/*.zip'
-                    runtimeStack: 'DOTNETCORE|9.0'
