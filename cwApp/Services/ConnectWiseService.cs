@@ -88,7 +88,8 @@ public class ConnectWiseService
     /// - companyId != null → acota a esa company (permite ver tickets de una company aunque no sean tuyos).
     /// </summary>
     public async Task<List<TicketSummary>> GetTicketsAsync(
-        ConnectWiseConfig config, int? companyId = null, bool includeUnassigned = false, int pageSize = 100)
+        ConnectWiseConfig config, int? companyId = null, bool includeUnassigned = false,
+        string? keyword = null, int pageSize = 100)
     {
         var baseUrl = $"https://{config.SiteUrl}/v4_6_release/apis/3.0";
 
@@ -97,6 +98,8 @@ public class ConnectWiseService
             conds.Add($"resources contains \"{config.MemberId}\"");
         if (companyId is not null)
             conds.Add($"company/id={companyId}");
+        if (!string.IsNullOrWhiteSpace(keyword))
+            conds.Add($"summary contains \"{keyword.Replace("\"", "").Trim()}\"");
 
         var conditions = Uri.EscapeDataString(string.Join(" AND ", conds));
         var url = $"{baseUrl}/service/tickets?conditions={conditions}&orderBy=id desc&pageSize={pageSize}";

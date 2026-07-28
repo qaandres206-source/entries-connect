@@ -768,7 +768,7 @@
                     c.Name.Equals(companyQuery.Trim(), StringComparison.OrdinalIgnoreCase));
                 companyId = match?.Id;
             }
-            myTickets = await CwService.GetTicketsAsync(config, companyId, includeUnassigned);
+            myTickets = await CwService.GetTicketsAsync(config, companyId, includeUnassigned, keyword);
             ticketsLoaded = true;
             // Si el ticket seleccionado ya no está en la lista, colapsa el detalle.
             if (selectedTicketId is not null && !myTickets.Any(t => t.Id == selectedTicketId))
