@@ -1,0 +1,17 @@
+# Blueprint de Render — ControlPanelPSA (Blazor Server / .NET 9) vía Docker.
+# Sustituye la configuración anterior de Python (pip / main.py).
+services:
+  - type: web
+    name: controlpanelpsa
+    runtime: docker
+    region: virginia
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # ITGlue: la key vive SOLO server-side. Se define en el dashboard de Render.
+      - key: ITGLUE_API_KEY
+        sync: false
+      - key: ITGLUE_WEB_URL
+        sync: false
+      # ITGLUE_BASE_URL es opcional: el default (US, api.itglue.com) es el correcto
+      # para el tenant sjuintwo.

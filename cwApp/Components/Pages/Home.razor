@@ -5,6 +5,7 @@
 @inject ConnectWiseService CwService
 @inject ConfigStorageService ConfigStorage
 @inject TicketContextService Bridge
+@inject ReportService Reports
 @inject IJSRuntime JS
 
 <PageTitle>ControlPanelPSA</PageTitle>
@@ -75,13 +76,39 @@
                     {
                         <div class="ticket-item @(selectedTicketId == t.Id ? "selected" : "")" @key="t.Id" @onclick="() => SelectTicket(t)">
                             <div class="ticket-item-head">
-                                <span class="ticket-id">#@t.Id</span>
+                                <span style="display:flex; align-items:center; gap:8px;">
+                                    <input type="checkbox" title="Incluir en el reporte"
+                                           checked="@selectedForReport.Contains(t.Id)"
+                                           @onclick:stopPropagation="true"
+                                           @onchange="@(e => ToggleReportSelection(t.Id, e))" />
+                                    <span class="ticket-id">#@t.Id</span>
+                                </span>
                                 <span class="ticket-status">@(t.Status?.Name ?? "—")</span>
                             </div>
                             <div class="ticket-summary">@t.Summary</div>
                             <div class="ticket-meta">@(t.Company?.Name ?? t.Company?.Identifier)</div>
                         </div>
                     }
+                </div>
+
+                <div class="report-bar">
+                    <button class="submit-btn" style="padding:10px 20px; font-size:0.9rem;"
+                            @onclick="DownloadTicketsReport" disabled="@isBuildingReport">
+                        @if (isBuildingReport)
+                        {
+                            <span class="spinner"></span>
+                            <span>Generando...</span>
+                        }
+                        else
+                        {
+                            <span>📊 Descargar reporte (.xlsx)</span>
+                        }
+                    </button>
+                    <span class="report-hint">
+                        @(selectedForReport.Any()
+                            ? $"{selectedForReport.Count} ticket(s) seleccionados."
+                            : "Sin selección → se incluyen todos los tickets listados.")
+                    </span>
                 </div>
             }
 
@@ -91,6 +118,13 @@
                     <div class="dates-header" style="margin-bottom:10px;">
                         <span class="dates-icon">💬</span>
                         <span class="dates-title">Hilo del ticket #@selectedTicketId</span>
+                        @if (selectedNotes.Any())
+                        {
+                            <button class="add-date-btn" style="margin-left:auto; padding:4px 12px; font-size:0.75rem;"
+                                    @onclick="DownloadTicketDetailReport" disabled="@isBuildingReport">
+                                📊 Exportar hilo
+                            </button>
+                        }
                     </div>
                     @if (isLoadingNotes)
                     {
@@ -636,6 +670,10 @@
     private bool isLoadingContext = false;
     private string? contextError = null;
 
+    // ---- Estado: reportes .xlsx ----
+    private HashSet<int> selectedForReport = new();
+    private bool isBuildingReport = false;
+
     protected override async Task OnInitializedAsync()
     {
         var today = DateTime.Today;
@@ -738,6 +776,76 @@
         n.ResolutionFlag ? "resolution" :
         n.InternalAnalysisFlag ? "internal" :
         n.DetailDescriptionFlag ? "discussion" : "default";
+
+    // ---- Reportes .xlsx (descarga local, sin email) ----
+
+    private void ToggleReportSelection(int id, ChangeEventArgs e)
+    {
+        if (e.Value is true) selectedForReport.Add(id);
+        else selectedForReport.Remove(id);
+    }
+
+    /// <summary>Genera y descarga el .xlsx con los tickets seleccionados (o todos si no hay selección).</summary>
+    private async Task DownloadTicketsReport()
+    {
+        var chosen = selectedForReport.Any()
+            ? myTickets.Where(t => selectedForReport.Contains(t.Id)).ToList()
+            : myTickets;
+
+        if (!chosen.Any())
+        {
+            await ShowSnackbar("⚠ No hay tickets para exportar", "error");
+            return;
+        }
+
+        isBuildingReport = true;
+        try
+        {
+            var bytes = Reports.BuildTicketsReport(chosen, config.MemberId);
+            await SaveFile($"mis-tickets-{DateTime.Now:yyyyMMdd-HHmm}.xlsx", bytes);
+            await ShowSnackbar($"✓ Reporte generado ({chosen.Count} tickets)", "success");
+        }
+        catch (Exception ex)
+        {
+            await ShowSnackbar($"✗ Error al generar el reporte: {ex.Message}", "error");
+        }
+        finally
+        {
+            isBuildingReport = false;
+        }
+    }
+
+    /// <summary>Genera y descarga el .xlsx con el detalle y hilo de notas del ticket abierto.</summary>
+    private async Task DownloadTicketDetailReport()
+    {
+        var ticket = myTickets.FirstOrDefault(t => t.Id == selectedTicketId);
+        if (ticket is null) return;
+
+        isBuildingReport = true;
+        try
+        {
+            var bytes = Reports.BuildTicketDetailReport(ticket, selectedNotes);
+            await SaveFile($"ticket-{ticket.Id}-{DateTime.Now:yyyyMMdd-HHmm}.xlsx", bytes);
+            await ShowSnackbar($"✓ Hilo del ticket #{ticket.Id} exportado", "success");
+        }
+        catch (Exception ex)
+        {
+            await ShowSnackbar($"✗ Error al exportar: {ex.Message}", "error");
+        }
+        finally
+        {
+            isBuildingReport = false;
+        }
+    }
+
+    /// <summary>Entrega los bytes al navegador como descarga (JS interop).</summary>
+    private async Task SaveFile(string fileName, byte[] bytes)
+    {
+        await JS.InvokeVoidAsync("downloadFileFromBase64",
+            fileName,
+            Convert.ToBase64String(bytes),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
 
     // ---- Modo sencillo: fechas ----
     private void AddDateEntry()

@@ -25,6 +25,9 @@ builder.Services.AddSingleton(new ItGlueOptions
 builder.Services.AddScoped<ItGlueService>();
 builder.Services.AddScoped<TicketContextService>();
 
+// Reportes .xlsx (descarga en el navegador, sin envío por email).
+builder.Services.AddScoped<ReportService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
