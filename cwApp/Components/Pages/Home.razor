@@ -33,14 +33,36 @@
         <div class="card tickets-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <h2 class="section-title" style="margin:0; padding:0; border:none;">🎫 Mis Tickets</h2>
-                @if (config.IsComplete() && ticketsLoaded && ticketsError is null)
-                {
-                    <button class="icon-btn" style="background:var(--primary); width:auto; padding:6px 14px; font-size:0.82rem; gap:6px; white-space:nowrap;"
-                            @onclick="LoadMyTickets" disabled="@isLoadingTickets" title="Recargar tickets">
-                        @if (isLoadingTickets) { <span class="spinner"></span> } else { <span>🔄 Recargar</span> }
-                    </button>
-                }
             </div>
+
+            @if (config.IsComplete())
+            {
+                <div class="filter-bar">
+                    <div class="field-group" style="flex:1; min-width:200px;">
+                        <label class="field-label">Company (filtro)</label>
+                        <select class="cw-select" @bind="filterCompanyId">
+                            <option value="">— Todas —</option>
+                            @foreach (var c in companies)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <label class="cw-check" style="margin-bottom:2px;">
+                        <input type="checkbox" @bind="includeUnassigned" />
+                        <span class="check-mark"></span>
+                        Incluir no asignados a mí
+                    </label>
+                    <button class="icon-btn" style="background:var(--primary); width:auto; padding:8px 14px; font-size:0.82rem; gap:6px; white-space:nowrap; margin-bottom:2px;"
+                            @onclick="LoadMyTickets" disabled="@isLoadingTickets" title="Aplicar filtro y cargar">
+                        @if (isLoadingTickets) { <span class="spinner"></span> } else { <span>🔎 Filtrar</span> }
+                    </button>
+                </div>
+                @if (includeUnassigned && string.IsNullOrEmpty(filterCompanyId))
+                {
+                    <div class="report-hint" style="margin-bottom:8px;">Con "no asignados" conviene elegir una company; si no, se listan todos los abiertos (hasta 100).</div>
+                }
+            }
 
             @if (!config.IsComplete())
             {
@@ -67,7 +89,7 @@
             }
             else if (!myTickets.Any())
             {
-                <div class="tickets-empty">No tienes tickets abiertos asignados (filtro: owner = @config.MemberId).</div>
+                <div class="tickets-empty">No hay tickets abiertos con este filtro.</div>
             }
             else
             {
@@ -674,6 +696,12 @@
     private HashSet<int> selectedForReport = new();
     private bool isBuildingReport = false;
 
+    // ---- Estado: filtro (company / no asignados) ----
+    private List<CompanyItem> companies = new();
+    private bool companiesLoaded = false;
+    private string filterCompanyId = "";
+    private bool includeUnassigned = false;
+
     protected override async Task OnInitializedAsync()
     {
         var today = DateTime.Today;
@@ -688,6 +716,8 @@
         config = await ConfigStorage.LoadAsync();
         if (!config.IsComplete())
             OpenSettings();
+        else
+            await LoadCompanies();
     }
 
     // ---- Mis Tickets (Fase 1 + 2) ----
@@ -701,7 +731,10 @@
         ticketsError = null;
         try
         {
-            myTickets = await CwService.GetMyTicketsAsync(config);
+            if (!companiesLoaded) await LoadCompanies();
+
+            int? companyId = int.TryParse(filterCompanyId, out var cid) ? cid : null;
+            myTickets = await CwService.GetTicketsAsync(config, companyId, includeUnassigned);
             ticketsLoaded = true;
             // Si el ticket seleccionado ya no está en la lista, colapsa el detalle.
             if (selectedTicketId is not null && !myTickets.Any(t => t.Id == selectedTicketId))
@@ -714,6 +747,21 @@
         finally
         {
             isLoadingTickets = false;
+        }
+    }
+
+    /// <summary>Carga la lista de companies para el desplegable de filtro (una sola vez).</summary>
+    private async Task LoadCompanies()
+    {
+        try
+        {
+            companies = await CwService.GetCompaniesAsync(config);
+            companiesLoaded = true;
+        }
+        catch
+        {
+            // Si falla, el filtro por company no estará disponible; los tickets se cargan igual.
+            companiesLoaded = false;
         }
     }
 

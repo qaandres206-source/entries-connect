@@ -68,3 +68,11 @@ public class TicketMember
     public string Identifier { get; set; } = "";
     public string Name { get; set; } = "";
 }
+
+/// <summary>Company de ConnectWise (para el desplegable de filtro de tickets).</summary>
+public class CompanyItem
+{
+    public int Id { get; set; }
+    public string Identifier { get; set; } = "";
+    public string Name { get; set; } = "";
+}

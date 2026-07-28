@@ -81,14 +81,24 @@ public class ConnectWiseService
     }
 
     /// <summary>
-    /// Devuelve los tickets abiertos asignados al miembro configurado.
-    /// El filtro usa owner/identifier; según el flujo de la instancia puede
-    /// que el campo correcto sea "resources" — ajustar tras validar con datos reales.
+    /// Devuelve tickets abiertos según el filtro:
+    /// - includeUnassigned = false → solo donde el miembro es Resource (resources contains MemberId),
+    ///   que es como aparecen tus tickets en el Service Board (antes usábamos owner/identifier, que
+    ///   solo trae los tickets de los que eres dueño).
+    /// - companyId != null → acota a esa company (permite ver tickets de una company aunque no sean tuyos).
     /// </summary>
-    public async Task<List<TicketSummary>> GetMyTicketsAsync(ConnectWiseConfig config, int pageSize = 50)
+    public async Task<List<TicketSummary>> GetTicketsAsync(
+        ConnectWiseConfig config, int? companyId = null, bool includeUnassigned = false, int pageSize = 100)
     {
         var baseUrl = $"https://{config.SiteUrl}/v4_6_release/apis/3.0";
-        var conditions = Uri.EscapeDataString($"closedFlag=false AND owner/identifier=\"{config.MemberId}\"");
+
+        var conds = new List<string> { "closedFlag=false" };
+        if (!includeUnassigned)
+            conds.Add($"resources contains \"{config.MemberId}\"");
+        if (companyId is not null)
+            conds.Add($"company/id={companyId}");
+
+        var conditions = Uri.EscapeDataString(string.Join(" AND ", conds));
         var url = $"{baseUrl}/service/tickets?conditions={conditions}&orderBy=id desc&pageSize={pageSize}";
 
         var client = CreateClient(config);
@@ -98,6 +108,22 @@ public class ConnectWiseService
             throw new InvalidOperationException(await BuildErrorMessageAsync(response));
 
         return await response.Content.ReadFromJsonAsync<List<TicketSummary>>() ?? new();
+    }
+
+    /// <summary>Devuelve las companies (para el desplegable de filtro).</summary>
+    public async Task<List<CompanyItem>> GetCompaniesAsync(ConnectWiseConfig config, int pageSize = 1000)
+    {
+        var baseUrl = $"https://{config.SiteUrl}/v4_6_release/apis/3.0";
+        var conditions = Uri.EscapeDataString("deletedFlag=false");
+        var url = $"{baseUrl}/company/companies?conditions={conditions}&orderBy=name asc&pageSize={pageSize}&fields=id,identifier,name";
+
+        var client = CreateClient(config);
+        var response = await client.GetAsync(url);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(await BuildErrorMessageAsync(response));
+
+        return await response.Content.ReadFromJsonAsync<List<CompanyItem>>() ?? new();
     }
 
     /// <summary>Devuelve el detalle de un ticket por su id.</summary>
