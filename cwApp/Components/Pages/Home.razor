@@ -27,40 +27,51 @@
     </header>
 
     <!-- MAIN CONTENT -->
-    <main class="cw-main">
+    <main class="cw-main dashboard">
 
-        <!-- MIS TICKETS -->
+      <!-- COLUMNA IZQUIERDA: BOARD -->
+      <div class="col col-left">
         <div class="card tickets-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                <h2 class="section-title" style="margin:0; padding:0; border:none;">🎫 Mis Tickets</h2>
+                <h2 class="section-title" style="margin:0; padding:0; border:none;">🗂 Board</h2>
+                @if (config.IsComplete() && ticketsLoaded && ticketsError is null)
+                {
+                    <span class="board-count">@FilteredTickets.Count() / @myTickets.Count</span>
+                }
             </div>
 
             @if (config.IsComplete())
             {
                 <div class="filter-bar">
-                    <div class="field-group" style="flex:1; min-width:200px;">
-                        <label class="field-label">Company (filtro)</label>
-                        <select class="cw-select" @bind="filterCompanyId">
-                            <option value="">— Todas —</option>
+                    <div class="field-group" style="flex:1; min-width:160px;">
+                        <label class="field-label">🔎 Company</label>
+                        <input class="cw-input" list="companies-list" placeholder="Todas — escribe para filtrar"
+                               @bind="companyQuery" @bind:event="oninput" />
+                        <datalist id="companies-list">
                             @foreach (var c in companies)
                             {
-                                <option value="@c.Id">@c.Name</option>
+                                <option value="@c.Name"></option>
                             }
-                        </select>
+                        </datalist>
                     </div>
-                    <label class="cw-check" style="margin-bottom:2px;">
+                    <div class="field-group" style="flex:1; min-width:130px;">
+                        <label class="field-label">Palabra clave</label>
+                        <input class="cw-input" type="search" placeholder="acota la lista..."
+                               @bind="keyword" @bind:event="oninput" />
+                    </div>
+                    <label class="cw-check" style="margin-bottom:8px;" title="Ver todos los tickets (no solo los tuyos)">
                         <input type="checkbox" @bind="includeUnassigned" />
                         <span class="check-mark"></span>
-                        Incluir no asignados a mí
+                        No asignados
                     </label>
-                    <button class="icon-btn" style="background:var(--primary); width:auto; padding:8px 14px; font-size:0.82rem; gap:6px; white-space:nowrap; margin-bottom:2px;"
+                    <button class="icon-btn" style="background:var(--primary); width:auto; padding:8px 14px; font-size:0.82rem; gap:6px; white-space:nowrap; margin-bottom:8px;"
                             @onclick="LoadMyTickets" disabled="@isLoadingTickets" title="Aplicar filtro y cargar">
                         @if (isLoadingTickets) { <span class="spinner"></span> } else { <span>🔎 Filtrar</span> }
                     </button>
                 </div>
-                @if (includeUnassigned && string.IsNullOrEmpty(filterCompanyId))
+                @if (includeUnassigned && string.IsNullOrWhiteSpace(companyQuery))
                 {
-                    <div class="report-hint" style="margin-bottom:8px;">Con "no asignados" conviene elegir una company; si no, se listan todos los abiertos (hasta 100).</div>
+                    <div class="report-hint" style="margin-bottom:8px;">Con "no asignados" conviene elegir una company; si no, se listan todos los abiertos (hasta 100). Usa la palabra clave para acotar.</div>
                 }
             }
 
@@ -94,7 +105,7 @@
             else
             {
                 <div class="tickets-list">
-                    @foreach (var t in myTickets)
+                    @foreach (var t in FilteredTickets)
                     {
                         <div class="ticket-item @(selectedTicketId == t.Id ? "selected" : "")" @key="t.Id" @onclick="() => SelectTicket(t)">
                             <div class="ticket-item-head">
@@ -133,10 +144,15 @@
                     </span>
                 </div>
             }
+        </div><!-- /tickets-card -->
+      </div><!-- /col-left -->
+
+      <!-- COLUMNA DERECHA: detalle + entrada + log -->
+      <div class="col col-right">
 
             @if (selectedTicketId is not null)
             {
-                <div class="ticket-detail">
+                <div class="card detail-card">
                     <div class="dates-header" style="margin-bottom:10px;">
                         <span class="dates-icon">💬</span>
                         <span class="dates-title">Hilo del ticket #@selectedTicketId</span>
@@ -239,7 +255,6 @@
                     }
                 </div>
             }
-        </div>
 
         <!-- FORM CARD -->
         <div class="card form-card">
@@ -545,6 +560,7 @@
                 }
             </div>
         </div>
+      </div><!-- /col-right -->
     </main>
 </div>
 
@@ -696,11 +712,23 @@
     private HashSet<int> selectedForReport = new();
     private bool isBuildingReport = false;
 
-    // ---- Estado: filtro (company / no asignados) ----
+    // ---- Estado: filtro (company / palabra clave / no asignados) ----
     private List<CompanyItem> companies = new();
     private bool companiesLoaded = false;
-    private string filterCompanyId = "";
+    private string companyQuery = "";
+    private string keyword = "";
     private bool includeUnassigned = false;
+
+    /// <summary>Lista mostrada: filtro por palabra clave (cliente) sobre los tickets cargados.</summary>
+    private IEnumerable<TicketSummary> FilteredTickets =>
+        string.IsNullOrWhiteSpace(keyword)
+            ? myTickets
+            : myTickets.Where(t =>
+                (t.Summary?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (t.Company?.Name?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (t.Company?.Identifier?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (t.Status?.Name?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
+                || t.Id.ToString().Contains(keyword));
 
     protected override async Task OnInitializedAsync()
     {
@@ -733,7 +761,13 @@
         {
             if (!companiesLoaded) await LoadCompanies();
 
-            int? companyId = int.TryParse(filterCompanyId, out var cid) ? cid : null;
+            int? companyId = null;
+            if (!string.IsNullOrWhiteSpace(companyQuery))
+            {
+                var match = companies.FirstOrDefault(c =>
+                    c.Name.Equals(companyQuery.Trim(), StringComparison.OrdinalIgnoreCase));
+                companyId = match?.Id;
+            }
             myTickets = await CwService.GetTicketsAsync(config, companyId, includeUnassigned);
             ticketsLoaded = true;
             // Si el ticket seleccionado ya no está en la lista, colapsa el detalle.
