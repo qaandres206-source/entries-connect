@@ -1,6 +1,7 @@
 using cwApp.Components;
 using cwApp.Models;
 using cwApp.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,7 +42,15 @@ else
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// La app corre detrás del proxy de Render (que ya termina TLS y fuerza HTTPS).
+// Estas cabeceras le permiten conocer el esquema y la IP real del cliente; por eso
+// no se usa UseHttpsRedirection() aquí (provocaba el warning "Failed to determine
+// the https port for redirect").
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
 app.UseAntiforgery();
 
 app.MapStaticAssets();
