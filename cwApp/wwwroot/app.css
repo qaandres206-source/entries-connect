@@ -562,7 +562,74 @@ html, body {
 .snackbar-error { background: linear-gradient(135deg, #dc2626, #b91c1c); }
 .snackbar-warning { background: linear-gradient(135deg, #d97706, #b45309); }
 
-/* ===== MODAL / SETTINGS ===== */
+.mode-toggle-btn {
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    background: var(--primary);
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: background 0.2s, transform 0.15s;
+    font-family: inherit;
+}
+
+.mode-toggle-btn:hover {
+    background: var(--primary-hover);
+    transform: scale(1.05);
+}
+
+.mode-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.info-btn:hover {
+    color: var(--primary);
+}
+
+.info-tooltip {
+    position: absolute;
+    top: 40px;
+    right: 0;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 12px;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+    max-width: 280px;
+    line-height: 1.5;
+    animation: modalSlide 0.2s ease;
+}
+
+.info-tooltip strong {
+    color: var(--primary);
+    display: block;
+    margin-bottom: 4px;
+}
+
 .modal-overlay {
     position: fixed;
     inset: 0;

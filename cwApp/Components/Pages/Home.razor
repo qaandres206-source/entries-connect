@@ -260,19 +260,36 @@
         <div class="card form-card">
 
             <!-- Title + Mode Toggle -->
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:4px; position:relative;">
                 <h2 class="section-title" style="margin:0;">Nueva Entrada</h2>
-                <button class="icon-btn" style="padding:6px 14px; font-size:0.82rem; border-radius:8px; background:var(--accent); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;"
-                        @onclick="ToggleMultiTicketMode" type="button" title="Cambiar modo de entrada">
-                    @if (isMultiMode)
-                    {
-                        <span>📋 Entrada Múltiple</span>
-                    }
-                    else
-                    {
-                        <span>🎫 Entrada Sencilla</span>
-                    }
-                </button>
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span class="mode-label">Modo de entrada:</span>
+                    <button class="mode-toggle-btn"
+                            @onclick="ToggleMultiTicketMode" type="button" title="Cambiar modo de entrada">
+                        @if (isMultiMode)
+                        {
+                            <span>📋 Entrada Múltiple</span>
+                        }
+                        else
+                        {
+                            <span>🎫 Entrada Sencilla</span>
+                        }
+                    </button>
+                    <button class="info-btn" @onclick="() => showModeInfo = !showModeInfo" title="¿Qué es cada modo?">
+                        ⓘ
+                    </button>
+                </div>
+
+                @if (showModeInfo)
+                {
+                    <div class="info-tooltip">
+                        <strong>Entrada Sencilla:</strong>
+                        Permite registrar tiempo en un solo ticket de forma rápida.
+                        <br/><br/>
+                        <strong>Entrada Múltiple:</strong>
+                        Ideal para registrar la misma actividad en varios tickets a la vez, permitiendo definir el # de ticket y el tiempo para cada entrada(horas).
+                    </div>
+                }
             </div>
 
             <!-- ===================== MODO SENCILLO (original) ===================== -->
@@ -659,6 +676,8 @@
 
     // ---- Estado modo múltiple ----
     private bool isMultiMode = false;
+    private bool showModeInfo = false;
+
 
     /// <summary>
     /// Representa un ticket individual dentro del modo de entrada múltiple.
