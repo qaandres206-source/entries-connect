@@ -189,7 +189,7 @@
                     else
                     {
                         <div class="notes-thread">
-                            @foreach (var n in selectedNotes)
+                            @foreach (var n in ThreadNewestFirst)
                             {
                                 <div class="note-item" @key="@($"{n.Source}-{n.Id}")">
                                     <div class="note-head">
@@ -759,6 +759,13 @@
                 || (t.Company?.Identifier?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
                 || (t.Status?.Name?.Contains(keyword, StringComparison.OrdinalIgnoreCase) ?? false)
                 || t.Id.ToString().Contains(keyword));
+
+    /// <summary>
+    /// El hilo en pantalla se muestra al revés (lo más reciente arriba) para no tener que
+    /// bajar el scroll tras cada nota nueva. `selectedNotes` se mantiene en orden cronológico
+    /// porque es lo que espera el .xlsx del hilo, que sí se lee de principio a fin.
+    /// </summary>
+    private IEnumerable<TicketNote> ThreadNewestFirst => Enumerable.Reverse(selectedNotes);
 
     protected override async Task OnInitializedAsync()
     {
