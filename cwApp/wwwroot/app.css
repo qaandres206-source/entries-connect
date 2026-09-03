@@ -984,6 +984,13 @@ html, body {
     color: var(--text);
 }
 
+/* Marca de nota que vino de una entrada de tiempo */
+.note-source {
+    font-size: 11px;
+    opacity: 0.7;
+    cursor: help;
+}
+
 .note-date {
     font-size: 11px;
     color: var(--text-muted);

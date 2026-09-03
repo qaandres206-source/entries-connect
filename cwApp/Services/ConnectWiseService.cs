@@ -1,6 +1,7 @@
 using cwApp.Models;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace cwApp.Services;
 
@@ -157,6 +158,101 @@ public class ConnectWiseService
             throw new InvalidOperationException(await BuildErrorMessageAsync(response));
 
         return await response.Content.ReadFromJsonAsync<List<TicketNote>>() ?? new();
+    }
+
+    /// <summary>
+    /// Devuelve el hilo COMPLETO del ticket: las notas propias del ticket (ServiceNote)
+    /// MÁS las notas que viven dentro de entradas de tiempo, fusionadas, sin duplicados
+    /// y ordenadas cronológicamente.
+    ///
+    /// Por qué: una nota creada desde esta app se escribe como parte de un time entry
+    /// (POST /time/entries con addTo*Flag). ConnectWise la muestra en las pestañas
+    /// Discussion/Internal/Resolution del ticket, pero NO la devuelve
+    /// GET /service/tickets/{id}/notes — por eso antes "desaparecían" del hilo.
+    /// </summary>
+    public async Task<List<TicketNote>> GetTicketThreadAsync(ConnectWiseConfig config, string ticketId)
+    {
+        var notes = await GetTicketNotesAsync(config, ticketId);
+
+        List<TicketNote> fromTimeEntries;
+        try
+        {
+            fromTimeEntries = await GetTimeEntryNotesAsync(config, ticketId);
+        }
+        catch
+        {
+            // Best-effort: si la consulta de time entries falla, el hilo sigue mostrando
+            // al menos las notas propias del ticket en vez de romperse por completo.
+            fromTimeEntries = new();
+        }
+
+        return MergeThread(notes, fromTimeEntries);
+    }
+
+    /// <summary>
+    /// Fusiona las notas del ticket con las de entradas de tiempo, descarta duplicados
+    /// y ordena cronológicamente. Estático y público para poder probarlo sin red.
+    /// Ante un duplicado gana la nota del ticket (llega primero al HashSet).
+    /// </summary>
+    public static List<TicketNote> MergeThread(List<TicketNote> notes, List<TicketNote> fromTimeEntries)
+    {
+        var merged = new List<TicketNote>(notes);
+        var keys = new HashSet<string>(notes.Select(DedupeKey));
+
+        foreach (var n in fromTimeEntries)
+        {
+            if (keys.Add(DedupeKey(n)))
+                merged.Add(n);
+        }
+
+        return merged.OrderBy(n => n.DateCreated ?? DateTime.MinValue).ToList();
+    }
+
+    /// <summary>
+    /// Notas provenientes de las entradas de tiempo cargadas a un ticket, normalizadas
+    /// al mismo modelo que las notas del ticket para poder mostrarlas en el mismo hilo.
+    /// </summary>
+    public async Task<List<TicketNote>> GetTimeEntryNotesAsync(ConnectWiseConfig config, string ticketId, int pageSize = 200)
+    {
+        var baseUrl = $"https://{config.SiteUrl}/v4_6_release/apis/3.0";
+        var conditions = Uri.EscapeDataString($"chargeToId={ticketId} AND chargeToType=\"ServiceTicket\"");
+        var url = $"{baseUrl}/time/entries?conditions={conditions}&orderBy=dateEntered asc&pageSize={pageSize}";
+
+        var client = CreateClient(config);
+        var response = await client.GetAsync(url);
+
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException(await BuildErrorMessageAsync(response));
+
+        var entries = await response.Content.ReadFromJsonAsync<List<TimeEntryItem>>() ?? new();
+
+        return entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Notes))
+            .Select(e => new TicketNote
+            {
+                Id = e.Id,
+                Text = e.Notes!,
+                DetailDescriptionFlag = e.AddToDetailDescriptionFlag,
+                InternalAnalysisFlag = e.AddToInternalAnalysisFlag,
+                ResolutionFlag = e.AddToResolutionFlag,
+                Member = e.Member,
+                DateCreated = e.TimeStart ?? e.DateEntered,
+                Source = "tiempo"
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Clave de deduplicación: mismo texto + mismo autor + mismo minuto ⇒ es la misma nota.
+    /// Deliberadamente conservadora (incluye el minuto) para no ocultar notas legítimas
+    /// que repitan el texto en momentos distintos.
+    /// </summary>
+    private static string DedupeKey(TicketNote n)
+    {
+        var text = Regex.Replace(n.Text ?? "", @"\s+", " ").Trim().ToLowerInvariant();
+        var author = (n.Member?.Name ?? n.CreatedBy ?? "").Trim().ToLowerInvariant();
+        var when = n.DateCreated?.ToString("yyyy-MM-dd HH:mm") ?? "";
+        return $"{text}|{author}|{when}";
     }
 
     /// <summary>Crea un HttpClient con la autenticación Basic + clientId de ConnectWise.</summary>

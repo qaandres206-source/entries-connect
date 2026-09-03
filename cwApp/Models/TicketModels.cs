@@ -61,6 +61,30 @@ public class TicketNote
     public TicketMember? Member { get; set; }
     public DateTime? DateCreated { get; set; }
     public string? CreatedBy { get; set; }
+
+    /// <summary>
+    /// Origen de la nota dentro del hilo: "ticket" (nota propia del ticket / ServiceNote)
+    /// o "tiempo" (nota que vive dentro de una entrada de tiempo). No viene de la API.
+    /// </summary>
+    [JsonIgnore]
+    public string Source { get; set; } = "ticket";
+}
+
+/// <summary>
+/// Entrada de tiempo de ConnectWise. Sus notas también se muestran en el hilo del
+/// ticket (pestañas Discussion/Internal/Resolution), pero NO las devuelve el endpoint
+/// /service/tickets/{id}/notes, por eso hay que leerlas aparte y fusionarlas.
+/// </summary>
+public class TimeEntryItem
+{
+    public int Id { get; set; }
+    public string? Notes { get; set; }
+    public bool AddToDetailDescriptionFlag { get; set; }
+    public bool AddToInternalAnalysisFlag { get; set; }
+    public bool AddToResolutionFlag { get; set; }
+    public TicketMember? Member { get; set; }
+    public DateTime? TimeStart { get; set; }
+    public DateTime? DateEntered { get; set; }
 }
 
 public class TicketMember

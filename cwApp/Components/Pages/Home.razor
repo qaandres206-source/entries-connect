@@ -156,13 +156,20 @@
                     <div class="dates-header" style="margin-bottom:10px;">
                         <span class="dates-icon">💬</span>
                         <span class="dates-title">Hilo del ticket #@selectedTicketId</span>
-                        @if (selectedNotes.Any())
-                        {
-                            <button class="add-date-btn" style="margin-left:auto; padding:4px 12px; font-size:0.75rem;"
-                                    @onclick="DownloadTicketDetailReport" disabled="@isBuildingReport">
-                                📊 Exportar hilo
+                        <span style="margin-left:auto; display:flex; gap:8px;">
+                            <button class="add-date-btn" style="padding:4px 12px; font-size:0.75rem;"
+                                    @onclick="ReloadThread" disabled="@isLoadingNotes"
+                                    title="Volver a leer el hilo desde ConnectWise">
+                                🔄 Actualizar
                             </button>
-                        }
+                            @if (selectedNotes.Any())
+                            {
+                                <button class="add-date-btn" style="padding:4px 12px; font-size:0.75rem;"
+                                        @onclick="DownloadTicketDetailReport" disabled="@isBuildingReport">
+                                    📊 Exportar hilo
+                                </button>
+                            }
+                        </span>
                     </div>
                     @if (isLoadingNotes)
                     {
@@ -184,9 +191,13 @@
                         <div class="notes-thread">
                             @foreach (var n in selectedNotes)
                             {
-                                <div class="note-item" @key="n.Id">
+                                <div class="note-item" @key="@($"{n.Source}-{n.Id}")">
                                     <div class="note-head">
                                         <span class="note-badge note-@NoteTypeClass(n)">@NoteTypeLabel(n)</span>
+                                        @if (n.Source == "tiempo")
+                                        {
+                                            <span class="note-source" title="Nota registrada junto a una entrada de tiempo">⏱</span>
+                                        }
                                         <span class="note-author">@(n.Member?.Name ?? n.CreatedBy ?? "—")</span>
                                         <span class="note-date">@(n.DateCreated?.ToString("yyyy-MM-dd HH:mm"))</span>
                                     </div>
@@ -818,6 +829,30 @@
         }
     }
 
+    /// <summary>
+    /// Recarga el hilo del ticket abierto: notas del ticket + notas de entradas de tiempo,
+    /// fusionadas y sin duplicados.
+    /// </summary>
+    private async Task ReloadThread()
+    {
+        if (selectedTicketId is null) return;
+
+        isLoadingNotes = true;
+        notesError = null;
+        try
+        {
+            selectedNotes = await CwService.GetTicketThreadAsync(config, selectedTicketId.Value.ToString());
+        }
+        catch (Exception ex)
+        {
+            notesError = $"No se pudieron cargar las notas: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingNotes = false;
+        }
+    }
+
     /// <summary>Selecciona/colapsa un ticket, precarga su id en el formulario y trae su hilo de notas.</summary>
     private async Task SelectTicket(TicketSummary t)
     {
@@ -835,19 +870,7 @@
         ticketContext = null;
         contextError = null;
 
-        isLoadingNotes = true;
-        try
-        {
-            selectedNotes = await CwService.GetTicketNotesAsync(config, t.Id.ToString());
-        }
-        catch (Exception ex)
-        {
-            notesError = $"No se pudieron cargar las notas: {ex.Message}";
-        }
-        finally
-        {
-            isLoadingNotes = false;
-        }
+        await ReloadThread();
 
         // Fase 3: contexto relacionado de ITGlue (solo si la key está configurada server-side).
         if (Bridge.IsEnabled)
@@ -1041,6 +1064,10 @@
         isSubmitting = false;
         await HandleSubmitResult(successCount, errorCount);
 
+        // Si la nota se cargó al ticket que está abierto en el hilo, recárgalo para verla al instante.
+        if (successCount > 0 && selectedTicketId is not null && ticketId == selectedTicketId.Value.ToString())
+            await ReloadThread();
+
         if (successCount > 0 && errorCount == 0)
         {
             ticketId = "";
@@ -1096,6 +1123,11 @@
 
         isSubmitting = false;
         await HandleSubmitResult(successCount, errorCount);
+
+        // Igual que en modo sencillo: si alguno de los tickets enviados es el abierto, recarga su hilo.
+        if (successCount > 0 && selectedTicketId is not null &&
+            multiTickets.Any(mt => mt.TicketId == selectedTicketId.Value.ToString()))
+            await ReloadThread();
 
         if (successCount > 0 && errorCount == 0)
         {
