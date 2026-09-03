@@ -83,7 +83,7 @@ public class ReportService
         int row = headerRow + 1;
         foreach (var n in notes)
         {
-            ws.Cell(row, 1).Value = n.DateCreated?.ToString("yyyy-MM-dd HH:mm") ?? "";
+            ws.Cell(row, 1).Value = n.WhenLabel;
             ws.Cell(row, 2).Value = n.ResolutionFlag ? "Resolution"
                                   : n.InternalAnalysisFlag ? "Internal"
                                   : n.DetailDescriptionFlag ? "Discussion" : "Nota";
@@ -93,7 +93,7 @@ public class ReportService
             row++;
         }
 
-        ws.Column(1).Width = 18;
+        ws.Column(1).Width = 22;
         ws.Column(2).Width = 14;
         ws.Column(3).Width = 24;
         ws.Column(4).Width = 90;

@@ -36,13 +36,11 @@ public class ConnectWiseService
 
             double endHour = startHour + hours;
 
-            var startTime = new DateTime(date.Year, date.Month, date.Day,
-                (int)startHour, (int)((startHour % 1) * 60), 0);
-            startTime = startTime.AddHours(-config.TimezoneOffset);
+            var startTime = ToApiUtc(new DateTime(date.Year, date.Month, date.Day,
+                (int)startHour, (int)((startHour % 1) * 60), 0), config.TimezoneOffset);
 
-            var endTime = new DateTime(date.Year, date.Month, date.Day,
-                (int)endHour, (int)((endHour % 1) * 60), 0);
-            endTime = endTime.AddHours(-config.TimezoneOffset);
+            var endTime = ToApiUtc(new DateTime(date.Year, date.Month, date.Day,
+                (int)endHour, (int)((endHour % 1) * 60), 0), config.TimezoneOffset);
 
             var timeStart = startTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
             var timeEnd = endTime.ToString("yyyy-MM-ddTHH:mm:ssZ");
@@ -111,7 +109,13 @@ public class ConnectWiseService
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(await BuildErrorMessageAsync(response));
 
-        return await response.Content.ReadFromJsonAsync<List<TicketSummary>>() ?? new();
+        var tickets = await response.Content.ReadFromJsonAsync<List<TicketSummary>>() ?? new();
+
+        foreach (var t in tickets)
+            if (t.Info is not null)
+                t.Info.LastUpdated = ToUserLocal(t.Info.LastUpdated, config.TimezoneOffset);
+
+        return tickets;
     }
 
     /// <summary>Devuelve las companies (para el desplegable de filtro).</summary>
@@ -142,7 +146,12 @@ public class ConnectWiseService
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(await BuildErrorMessageAsync(response));
 
-        return await response.Content.ReadFromJsonAsync<TicketSummary>();
+        var ticket = await response.Content.ReadFromJsonAsync<TicketSummary>();
+
+        if (ticket?.Info is not null)
+            ticket.Info.LastUpdated = ToUserLocal(ticket.Info.LastUpdated, config.TimezoneOffset);
+
+        return ticket;
     }
 
     /// <summary>Devuelve el hilo de notas (discussion / internal / resolution) de un ticket.</summary>
@@ -157,7 +166,38 @@ public class ConnectWiseService
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(await BuildErrorMessageAsync(response));
 
-        return await response.Content.ReadFromJsonAsync<List<TicketNote>>() ?? new();
+        var notes = await response.Content.ReadFromJsonAsync<List<TicketNote>>() ?? new();
+
+        // ConnectWise devuelve las fechas en UTC; las pasamos a la hora del usuario
+        // para que el hilo coincida con lo que se ve en ConnectWise.
+        foreach (var n in notes)
+            n.DateCreated = ToUserLocal(n.DateCreated, config.TimezoneOffset);
+
+        return notes;
+    }
+
+    /// <summary>
+    /// Convierte la hora local que escribe el usuario a la hora UTC que espera la API.
+    /// Inversa exacta de <see cref="ToUserLocal"/>.
+    /// </summary>
+    public static DateTime ToApiUtc(DateTime local, double offsetHours) =>
+        local.AddHours(-offsetHours);
+
+    /// <summary>
+    /// Convierte una fecha UTC de la API a la hora local del usuario según su
+    /// TimezoneOffset. Inversa exacta de <see cref="ToApiUtc"/>: al escribir hacemos
+    /// utc = local - offset, así que al leer local = utc + offset.
+    /// Estático y público para poder probarlo sin red.
+    /// </summary>
+    public static DateTime? ToUserLocal(DateTime? value, double offsetHours)
+    {
+        if (value is null) return null;
+
+        var v = value.Value;
+        // Si el deserializador resolvió la fecha a hora local del servidor, la volvemos a UTC.
+        if (v.Kind == DateTimeKind.Local) v = v.ToUniversalTime();
+
+        return DateTime.SpecifyKind(v, DateTimeKind.Unspecified).AddHours(offsetHours);
     }
 
     /// <summary>
@@ -236,7 +276,11 @@ public class ConnectWiseService
                 InternalAnalysisFlag = e.AddToInternalAnalysisFlag,
                 ResolutionFlag = e.AddToResolutionFlag,
                 Member = e.Member,
-                DateCreated = e.TimeStart ?? e.DateEntered,
+                // timeStart = cuándo se hizo el trabajo, que es lo que ConnectWise muestra
+                // en la cabecera de la nota ("3/9/2026 8:00 - 8:15"). Si no hay, caemos a
+                // dateEntered (cuándo se registró).
+                DateCreated = ToUserLocal(e.TimeStart ?? e.DateEntered, config.TimezoneOffset),
+                DateEnd = e.TimeStart is null ? null : ToUserLocal(e.TimeEnd, config.TimezoneOffset),
                 Source = "tiempo"
             })
             .ToList();

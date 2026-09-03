@@ -59,8 +59,22 @@ public class TicketNote
     public bool InternalAnalysisFlag { get; set; }
     public bool ResolutionFlag { get; set; }
     public TicketMember? Member { get; set; }
+
+    /// <summary>
+    /// Momento de la nota YA CONVERTIDO a la zona horaria del usuario
+    /// (ConnectWise entrega todo en UTC; el servicio aplica TimezoneOffset al leer).
+    /// Para notas del ticket es cuándo se escribió; para notas de una entrada de
+    /// tiempo es el inicio del trabajo (timeStart), que es lo que muestra ConnectWise.
+    /// </summary>
     public DateTime? DateCreated { get; set; }
     public string? CreatedBy { get; set; }
+
+    /// <summary>
+    /// Fin del trabajo, solo para notas que vienen de una entrada de tiempo.
+    /// Permite mostrar el rango "08:00–08:15" igual que ConnectWise. No viene de la API.
+    /// </summary>
+    [JsonIgnore]
+    public DateTime? DateEnd { get; set; }
 
     /// <summary>
     /// Origen de la nota dentro del hilo: "ticket" (nota propia del ticket / ServiceNote)
@@ -68,6 +82,14 @@ public class TicketNote
     /// </summary>
     [JsonIgnore]
     public string Source { get; set; } = "ticket";
+
+    /// <summary>Etiqueta de fecha/hora para la UI y los reportes, en hora del usuario.</summary>
+    [JsonIgnore]
+    public string WhenLabel =>
+        DateCreated is null ? ""
+        : DateEnd is DateTime end && end > DateCreated
+            ? $"{DateCreated:yyyy-MM-dd HH:mm}–{end:HH:mm}"
+            : $"{DateCreated:yyyy-MM-dd HH:mm}";
 }
 
 /// <summary>
@@ -84,6 +106,7 @@ public class TimeEntryItem
     public bool AddToResolutionFlag { get; set; }
     public TicketMember? Member { get; set; }
     public DateTime? TimeStart { get; set; }
+    public DateTime? TimeEnd { get; set; }
     public DateTime? DateEntered { get; set; }
 }
 

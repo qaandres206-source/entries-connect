@@ -199,7 +199,7 @@
                                             <span class="note-source" title="Nota registrada junto a una entrada de tiempo">⏱</span>
                                         }
                                         <span class="note-author">@(n.Member?.Name ?? n.CreatedBy ?? "—")</span>
-                                        <span class="note-date">@(n.DateCreated?.ToString("yyyy-MM-dd HH:mm"))</span>
+                                        <span class="note-date">@n.WhenLabel</span>
                                     </div>
                                     <div class="note-text">@n.Text</div>
                                 </div>
