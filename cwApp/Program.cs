@@ -29,6 +29,10 @@ builder.Services.AddScoped<TicketContextService>();
 // Reportes .xlsx (descarga en el navegador, sin envío por email).
 builder.Services.AddScoped<ReportService>();
 
+// Proxy de las imágenes incrustadas en las notas. Singleton porque el navegador
+// pide /note-image/{token} en peticiones aparte del circuito de Blazor.
+builder.Services.AddSingleton<NoteImageProxy>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -54,6 +58,23 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// Sirve una imagen incrustada en una nota de ConnectWise. El token solo lo puede haber
+// emitido esta app (va firmado con un secreto del proceso) y apunta a una URL del propio
+// ConnectWise del usuario; ver NoteImageProxy para el porqué de esa restricción.
+app.MapGet("/note-image/{token}", async (
+    string token, NoteImageProxy proxy, IHttpClientFactory factory,
+    HttpResponse response, CancellationToken ct) =>
+{
+    var image = await proxy.FetchAsync(token, factory, ct);
+    if (image is null) return Results.NotFound();
+
+    // Privada y de corta vida: la imagen es de un ticket, no debe cachearla ningún proxy
+    // intermedio, pero sí el navegador para no volver a pedirla al hacer scroll.
+    response.Headers.CacheControl = "private, max-age=3600";
+    return Results.File(image.Value.Bytes, image.Value.ContentType);
+});
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddInteractiveWebAssemblyRenderMode()

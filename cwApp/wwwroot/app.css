@@ -1001,8 +1001,15 @@ html, body {
     font-size: 13px;
     color: var(--text);
     line-height: 1.5;
-    white-space: pre-wrap;
     word-break: break-word;
+    /* Normal a propósito: los saltos de línea de la nota los conserva .note-text-part.
+       Si aquí hubiera pre-wrap, la sangría del propio .razor se vería como espacios. */
+    white-space: normal;
+}
+
+/* Cada trozo de texto de la nota conserva sus saltos de línea y su espaciado. */
+.note-text-part {
+    white-space: pre-wrap;
 }
 
 /* Relacionado en ITGlue */
@@ -1036,6 +1043,159 @@ html, body {
 }
 
     .itglue-link:hover { text-decoration: underline; }
+
+/* ===== IMÁGENES DENTRO DE LAS NOTAS ===== */
+
+.note-link {
+    color: var(--primary);
+    text-decoration: none;
+    word-break: break-all;
+}
+
+    .note-link:hover { text-decoration: underline; }
+
+.note-img-wrap {
+    display: block;
+    margin: 8px 0 4px;
+}
+
+.note-img-btn {
+    position: relative;
+    display: inline-block;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    cursor: zoom-in;
+    overflow: hidden;
+    line-height: 0;
+    max-width: 100%;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+    .note-img-btn:hover,
+    .note-img-btn:focus-visible {
+        border-color: var(--primary);
+        box-shadow: 0 2px 10px rgba(37,99,235,0.18);
+        outline: none;
+    }
+
+.note-img {
+    display: block;
+    max-width: 100%;
+    /* Miniatura: el hilo tiene su propio scroll y una captura a tamaño real lo inunda. */
+    max-height: 200px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    /* Reserva sitio mientras carga para que el hilo no dé saltos (evita layout shift). */
+    min-width: 120px;
+    min-height: 60px;
+    background: var(--surface-variant);
+}
+
+.note-img-hint {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    font-size: 10.5px;
+    line-height: 1.6;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(0,0,0,0.6);
+    border-radius: 999px;
+    padding: 1px 8px;
+    pointer-events: none;
+}
+
+.note-img-fallback {
+    display: inline-block;
+    margin: 6px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    text-decoration: none;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+    .note-img-fallback:hover {
+        border-color: var(--primary);
+        text-decoration: underline;
+    }
+
+/* ===== VISOR DE IMAGEN (LIGHTBOX) ===== */
+
+.lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;               /* por encima del modal de configuración */
+    background: rgba(0,0,0,0.88);
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.15s ease;
+}
+
+.lightbox-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    /* Respeta la barra de estado del iPhone cuando corre como app instalada */
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: rgba(0,0,0,0.5);
+    flex-shrink: 0;
+}
+
+.lightbox-caption {
+    color: rgba(255,255,255,0.75);
+    font-size: 12px;
+    margin-right: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lightbox-action {
+    /* 44px de alto: el mínimo recomendado para tocar con el dedo sin fallar */
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255,255,255,0.14);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s;
+}
+
+    .lightbox-action:hover { background: rgba(255,255,255,0.26); }
+
+.lightbox-stage {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    overflow: auto;              /* permite desplazarse tras hacer zoom con los dedos */
+    touch-action: pinch-zoom;
+    cursor: zoom-out;
+}
+
+.lightbox-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    cursor: default;
+}
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
